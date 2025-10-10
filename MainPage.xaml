@@ -3,67 +3,58 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="VisionFocus.MainPage">
 
-    <Grid RowDefinitions="Auto, *, Auto" Padding="20">
+    <Grid RowDefinitions="Auto, *" Padding="20">
 
         <!-- タイトル -->
-        <VerticalStackLayout Grid.Row="0" Spacing="10" Margin="0,0,0,20">
+        <VerticalStackLayout Grid.Row="0" 
+                             Spacing="10" 
+                             Margin="0,0,0,40"
+                             VerticalOptions="Center">
             <Label Text="VisionFocus"
                    Style="{StaticResource Headline}"
                    SemanticProperties.HeadingLevel="Level1" />
-            <Label Text="リアルタイムカメラプレビュー"
+            <Label Text="リアルタイムカメラアプリケーション"
                    Style="{StaticResource SubHeadline}"
                    SemanticProperties.HeadingLevel="Level2" />
         </VerticalStackLayout>
 
-        <!-- カメラプレビュー -->
-        <Border Grid.Row="1"
-                BackgroundColor="Black"
-                StrokeThickness="0"
-                Margin="0,0,0,20">
-            <Border.StrokeShape>
-                <RoundRectangle CornerRadius="10" />
-            </Border.StrokeShape>
+        <!-- メニューボタン -->
+        <VerticalStackLayout Grid.Row="1" 
+                             Spacing="20" 
+                             VerticalOptions="Center"
+                             HorizontalOptions="Center"
+                             WidthRequest="300">
 
-            <Grid>
-                <!-- カメラ画像 -->
-                <Image x:Name="CameraPreview"
-                       Aspect="AspectFit"
-                       HorizontalOptions="Fill"
-                       VerticalOptions="Fill" />
-
-                <!-- ステータス表示 -->
-                <Label x:Name="StatusLabel"
-                       Text="カメラを起動してください"
-                       TextColor="White"
-                       BackgroundColor="#80000000"
-                       Padding="10"
-                       HorizontalOptions="Center"
-                       VerticalOptions="Center"
-                       FontSize="18" />
-            </Grid>
-        </Border>
-
-        <!-- コントロールボタン -->
-        <Grid Grid.Row="2" ColumnDefinitions="*, *" ColumnSpacing="10">
-            <Button x:Name="StartButton"
-                    Grid.Column="0"
-                    Text="📷 カメラ開始"
-                    Clicked="OnStartClicked"
+            <Button Text="📷 カメラを起動"
+                    Clicked="OnCameraClicked"
                     BackgroundColor="#512BD4"
                     TextColor="White"
-                    HeightRequest="50"
-                    FontSize="16" />
+                    HeightRequest="60"
+                    FontSize="18"
+                    CornerRadius="15" />
 
-            <Button x:Name="StopButton"
-                    Grid.Column="1"
-                    Text="⏹ 停止"
-                    Clicked="OnStopClicked"
-                    BackgroundColor="#F44336"
+            <Button Text="📁 ギャラリー"
+                    Clicked="OnGalleryClicked"
+                    BackgroundColor="#4CAF50"
                     TextColor="White"
-                    HeightRequest="50"
-                    FontSize="16"
-                    IsEnabled="False" />
-        </Grid>
+                    HeightRequest="60"
+                    FontSize="18"
+                    CornerRadius="15" />
+
+            <Button Text="⚙️ 設定"
+                    Clicked="OnSettingsClicked"
+                    BackgroundColor="#2196F3"
+                    TextColor="White"
+                    HeightRequest="60"
+                    FontSize="18"
+                    CornerRadius="15" />
+
+            <Label Text="バージョン 1.0"
+                   HorizontalOptions="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"
+                   FontSize="12"
+                   Margin="0,20,0,0" />
+        </VerticalStackLayout>
 
     </Grid>
 
