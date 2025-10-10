@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:camera="clr-namespace:CommunityToolkit.Maui.Views;assembly=CommunityToolkit.Maui.Camera"
+             x:Class="VisionFocus.CameraPage"
+             Title="カメラ">
+
+    <Grid RowDefinitions="*, Auto">
+
+        <!-- カメラプレビュー -->
+        <camera:CameraView 
+            x:Name="CameraView"
+            Grid.Row="0"
+            CameraEnabled="True"
+            ImageCaptureResolution="Medium"
+            ZoomFactor="1.0" />
+
+        <!-- カメラオーバーレイ（グリッド線など） -->
+        <Grid Grid.Row="0"
+              HorizontalOptions="Fill"
+              VerticalOptions="Fill"
+              BackgroundColor="Transparent"
+              InputTransparent="True">
+
+            <!-- 中央のフォーカスガイド -->
+            <BoxView 
+                WidthRequest="200"
+                HeightRequest="200"
+                Color="Transparent"
+                Stroke="White"
+                StrokeThickness="2"
+                HorizontalOptions="Center"
+                VerticalOptions="Center"
+                CornerRadius="10" />
+
+            <!-- ステータス表示 -->
+            <Label 
+                x:Name="StatusLabel"
+                Text=""
+                TextColor="White"
+                BackgroundColor="#80000000"
+                Padding="10,5"
+                HorizontalOptions="Center"
+                VerticalOptions="Start"
+                Margin="0,20,0,0"
+                IsVisible="False" />
+        </Grid>
+
+        <!-- コントロールパネル -->
+        <Grid Grid.Row="1"
+              BackgroundColor="#CC000000"
+              Padding="20"
+              RowDefinitions="Auto, Auto"
+              ColumnDefinitions="*, *, *">
+
+            <!-- ズームスライダー -->
+            <VerticalStackLayout Grid.Row="0" 
+                                Grid.ColumnSpan="3"
+                                Margin="0,0,0,10">
+                <Label Text="ズーム" 
+                       TextColor="White" 
+                       FontSize="12"
+                       HorizontalOptions="Start" />
+                <Slider x:Name="ZoomSlider"
+                        Minimum="1"
+                        Maximum="5"
+                        Value="1"
+                        MinimumTrackColor="White"
+                        MaximumTrackColor="Gray"
+                        ThumbColor="White"
+                        ValueChanged="OnZoomChanged" />
+            </VerticalStackLayout>
+
+            <!-- 戻るボタン -->
+            <Button Grid.Row="1"
+                    Grid.Column="0"
+                    Text="◀ 戻る"
+                    Clicked="OnBackClicked"
+                    BackgroundColor="#44FFFFFF"
+                    TextColor="White"
+                    CornerRadius="20"
+                    Padding="10" />
+
+            <!-- 撮影ボタン -->
+            <Button Grid.Row="1"
+                    Grid.Column="1"
+                    Text="📷"
+                    Clicked="OnCaptureClicked"
+                    BackgroundColor="White"
+                    TextColor="Black"
+                    FontSize="32"
+                    CornerRadius="35"
+                    WidthRequest="70"
+                    HeightRequest="70"
+                    HorizontalOptions="Center" />
+
+            <!-- カメラ切り替えボタン -->
+            <Button Grid.Row="1"
+                    Grid.Column="2"
+                    Text="🔄"
+                    Clicked="OnSwitchCameraClicked"
+                    BackgroundColor="#44FFFFFF"
+                    TextColor="White"
+                    CornerRadius="20"
+                    Padding="10" />
+        </Grid>
+    </Grid>
+
+</ContentPage>
