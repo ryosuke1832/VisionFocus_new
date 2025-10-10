@@ -1,20 +1,36 @@
-﻿namespace VisionFocus
+﻿#if WINDOWS
+using Windows.Media.Capture;
+using Windows.Storage.Streams;
+using Windows.Graphics.Imaging;
+using System.Runtime.InteropServices.WindowsRuntime;
+#endif
+
+namespace VisionFocus
 {
     public partial class MainPage : ContentPage
     {
+#if WINDOWS
+        private MediaCapture? _mediaCapture;
+        private System.Timers.Timer? _timer;
+        private bool _isCapturing = false;
+#endif
+
         public MainPage()
         {
             InitializeComponent();
         }
 
         /// <summary>
-        /// 埋め込みカメラページに遷移
+        /// カメラ開始ボタン
         /// </summary>
-        private async void OnCameraClicked(object sender, EventArgs e)
+        private async void OnStartClicked(object sender, EventArgs e)
         {
+#if WINDOWS
             try
             {
-                // カメラ権限を確認
+                StatusLabel.Text = "カメラを初期化中...";
+
+                // カメラ権限チェック
                 var status = await Permissions.CheckStatusAsync<Permissions.Camera>();
                 if (status != PermissionStatus.Granted)
                 {
@@ -23,78 +39,132 @@
 
                 if (status != PermissionStatus.Granted)
                 {
-                    StatusLabel.Text = "カメラへのアクセス許可が必要です";
-                    await DisplayAlert("権限エラー", "カメラへのアクセス権限が必要です", "OK");
+                    await DisplayAlert("エラー", "カメラの権限が必要です", "OK");
+                    StatusLabel.Text = "権限エラー";
                     return;
                 }
 
-                // 埋め込みカメラページに遷移
-                await Navigation.PushAsync(new CameraPage());
+                // MediaCaptureを初期化
+                _mediaCapture = new MediaCapture();
+                var settings = new MediaCaptureInitializationSettings
+                {
+                    StreamingCaptureMode = StreamingCaptureMode.Video
+                };
+                await _mediaCapture.InitializeAsync(settings);
+
+                // タイマーで1秒ごとに撮影
+                _timer = new System.Timers.Timer(1000);
+                _timer.Elapsed += async (s, args) => await CaptureFrameAsync();
+                _timer.Start();
+
+                _isCapturing = true;
+                StartButton.IsEnabled = false;
+                StopButton.IsEnabled = true;
+                StatusLabel.IsVisible = false;
             }
             catch (Exception ex)
             {
-                await DisplayAlert("エラー", $"カメラページを開けませんでした: {ex.Message}", "OK");
+                await DisplayAlert("エラー", $"カメラの起動に失敗しました: {ex.Message}", "OK");
+                StatusLabel.Text = $"エラー: {ex.Message}";
             }
+#else
+            await DisplayAlert("エラー", "この機能はWindowsでのみ利用可能です", "OK");
+#endif
         }
 
         /// <summary>
-        /// ギャラリーから画像を選択
+        /// カメラ停止ボタン
         /// </summary>
-        private async void OnGalleryClicked(object sender, EventArgs e)
+        private void OnStopClicked(object sender, EventArgs e)
         {
+#if WINDOWS
             try
             {
-                StatusLabel.Text = "ギャラリーを開いています...";
+                _timer?.Stop();
+                _timer?.Dispose();
+                _timer = null;
 
-                // 写真の読み取り権限を確認
-                var status = await Permissions.CheckStatusAsync<Permissions.Photos>();
-                if (status != PermissionStatus.Granted)
-                {
-                    status = await Permissions.RequestAsync<Permissions.Photos>();
-                }
+                _mediaCapture?.Dispose();
+                _mediaCapture = null;
 
-                if (status != PermissionStatus.Granted)
-                {
-                    StatusLabel.Text = "ギャラリーへのアクセス許可が必要です";
-                    await DisplayAlert("権限エラー", "写真へのアクセス権限が必要です", "OK");
-                    return;
-                }
-
-                // ギャラリーから画像を選択
-                var photo = await MediaPicker.Default.PickPhotoAsync(new MediaPickerOptions
-                {
-                    Title = "画像を選択してください"
-                });
-
-                if (photo != null)
-                {
-                    // 選択した画像を表示
-                    await LoadPhotoAsync(photo);
-                    StatusLabel.Text = $"選択完了: {photo.FileName}";
-                }
-                else
-                {
-                    StatusLabel.Text = "画像の選択がキャンセルされました";
-                }
+                _isCapturing = false;
+                StartButton.IsEnabled = true;
+                StopButton.IsEnabled = false;
+                StatusLabel.Text = "停止しました";
+                StatusLabel.IsVisible = true;
             }
             catch (Exception ex)
             {
-                StatusLabel.Text = $"エラー: {ex.Message}";
-                await DisplayAlert("エラー", $"画像の選択に失敗しました: {ex.Message}", "OK");
+                DisplayAlert("エラー", $"停止中にエラーが発生しました: {ex.Message}", "OK");
             }
+#endif
         }
 
+#if WINDOWS
         /// <summary>
-        /// 撮影/選択した画像を読み込んで表示
+        /// カメラから1フレームをキャプチャして表示
         /// </summary>
-        private async Task LoadPhotoAsync(FileResult photo)
+        private async Task CaptureFrameAsync()
         {
-            // 画像ストリームを開く
-            var stream = await photo.OpenReadAsync();
+            if (_mediaCapture == null || !_isCapturing)
+                return;
 
-            // ImageSourceに変換
-            CapturedImage.Source = ImageSource.FromStream(() => stream);
-            CapturedImage.IsVisible = true;
+            try
+            {
+                // メモリストリームに撮影
+                using var stream = new InMemoryRandomAccessStream();
+                await _mediaCapture.CapturePhotoToStreamAsync(
+                    Windows.Media.MediaProperties.ImageEncodingProperties.CreateJpeg(),
+                    stream);
+
+                // 画像をデコード
+                stream.Seek(0);
+                var decoder = await BitmapDecoder.CreateAsync(stream);
+
+                // ピクセルデータを取得
+                var pixelData = await decoder.GetPixelDataAsync();
+                var pixels = pixelData.DetachPixelData();
+
+                // JPEGに再エンコード
+                using var outputStream = new InMemoryRandomAccessStream();
+                var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.JpegEncoderId, outputStream);
+                encoder.SetPixelData(
+                    BitmapPixelFormat.Bgra8,
+                    BitmapAlphaMode.Ignore,
+                    decoder.PixelWidth,
+                    decoder.PixelHeight,
+                    decoder.DpiX,
+                    decoder.DpiY,
+                    pixels);
+                await encoder.FlushAsync();
+
+                // バイト配列に変換
+                var bytes = new byte[outputStream.Size];
+                outputStream.Seek(0);
+                await outputStream.ReadAsync(bytes.AsBuffer(), (uint)bytes.Length, InputStreamOptions.None);
+
+                // メインスレッドでUIを更新
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    CameraPreview.Source = ImageSource.FromStream(() => new MemoryStream(bytes));
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"キャプチャエラー: {ex.Message}");
+            }
+        }
+#endif
+
+        protected override void OnDisappearing()
+        {
+            base.OnDisappearing();
+#if WINDOWS
+            // ページを離れる時は停止
+            _timer?.Stop();
+            _timer?.Dispose();
+            _mediaCapture?.Dispose();
+#endif
         }
     }
 }
