@@ -11,7 +11,6 @@
         <camera:CameraView 
             x:Name="CameraView"
             Grid.Row="0"
-            CameraEnabled="True"
             ImageCaptureResolution="Medium"
             ZoomFactor="1.0" />
 
@@ -23,15 +22,18 @@
               InputTransparent="True">
 
             <!-- 中央のフォーカスガイド -->
-            <BoxView 
+            <Border 
                 WidthRequest="200"
                 HeightRequest="200"
-                Color="Transparent"
+                BackgroundColor="Transparent"
                 Stroke="White"
                 StrokeThickness="2"
                 HorizontalOptions="Center"
-                VerticalOptions="Center"
-                CornerRadius="10" />
+                VerticalOptions="Center">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="10" />
+                </Border.StrokeShape>
+            </Border>
 
             <!-- ステータス表示 -->
             <Label 

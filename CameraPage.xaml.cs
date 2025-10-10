@@ -1,11 +1,12 @@
-using CommunityToolkit.Maui.Core.Primitives;
 using CommunityToolkit.Maui.Views;
+using CommunityToolkit.Maui.Core.Primitives;
 
 namespace VisionFocus
 {
     public partial class CameraPage : ContentPage
     {
         private bool isCapturing = false;
+        private int currentCameraIndex = 0;
 
         public CameraPage()
         {
@@ -15,24 +16,10 @@ namespace VisionFocus
         protected override async void OnAppearing()
         {
             base.OnAppearing();
-            await InitializeCameraAsync();
-        }
 
-        protected override void OnDisappearing()
-        {
-            base.OnDisappearing();
-            // カメラを停止
-            CameraView.CameraEnabled = false;
-        }
-
-        /// <summary>
-        /// カメラの初期化
-        /// </summary>
-        private async Task InitializeCameraAsync()
-        {
             try
             {
-                // カメラの権限を確認
+                // カメラ権限の確認
                 var status = await Permissions.CheckStatusAsync<Permissions.Camera>();
                 if (status != PermissionStatus.Granted)
                 {
@@ -41,15 +28,9 @@ namespace VisionFocus
 
                 if (status != PermissionStatus.Granted)
                 {
-                    await DisplayAlert("権限エラー", "カメラの使用許可が必要です", "OK");
+                    await DisplayAlert("権限エラー", "カメラへのアクセス権限が必要です", "OK");
                     await Navigation.PopAsync();
-                    return;
                 }
-
-                // カメラを有効化
-                CameraView.CameraEnabled = true;
-
-                ShowStatus("カメラ準備完了");
             }
             catch (Exception ex)
             {
@@ -58,85 +39,99 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// 写真を撮影
+        /// ズーム値が変更された時
+        /// </summary>
+        private void OnZoomChanged(object sender, ValueChangedEventArgs e)
+        {
+            try
+            {
+                CameraView.ZoomFactor = (float)e.NewValue;
+            }
+            catch (Exception ex)
+            {
+                ShowStatus($"ズームエラー: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 撮影ボタンがクリックされた時
         /// </summary>
         private async void OnCaptureClicked(object sender, EventArgs e)
         {
-            if (isCapturing) return;
+            if (isCapturing)
+                return;
 
             try
             {
                 isCapturing = true;
                 ShowStatus("撮影中...");
 
-                // 写真を撮影
-                var result = await CameraView.CaptureImage(default);
+                // 画像をキャプチャ
+                var imageStream = await CameraView.CaptureImage(default);
 
-                if (result != null)
+                if (imageStream != null)
                 {
-                    ShowStatus("撮影成功！");
+                    ShowStatus("撮影完了！");
 
-                    // 画像を保存
-                    var fileName = $"photo_{DateTime.Now:yyyyMMdd_HHmmss}.jpg";
-                    var filePath = Path.Combine(FileSystem.AppDataDirectory, fileName);
-
-                    await File.WriteAllBytesAsync(filePath, result);
-
-                    // 保存完了メッセージ
-                    await DisplayAlert("保存完了", $"画像を保存しました\n{fileName}", "OK");
-
-                    // 画像プレビュー画面に遷移（オプション）
-                    await Navigation.PushAsync(new ImagePreviewPage(filePath));
+                    // 撮影した画像をプレビューページに表示
+                    await Navigation.PushAsync(new ImagePreviewPage(imageStream));
                 }
                 else
                 {
-                    ShowStatus("撮影失敗");
+                    ShowStatus("撮影に失敗しました");
+                    await DisplayAlert("エラー", "画像のキャプチャに失敗しました", "OK");
                 }
             }
             catch (Exception ex)
             {
                 ShowStatus($"エラー: {ex.Message}");
-                await DisplayAlert("エラー", $"撮影に失敗しました: {ex.Message}", "OK");
+                await DisplayAlert("撮影エラー", $"画像の撮影に失敗しました: {ex.Message}", "OK");
             }
             finally
             {
                 isCapturing = false;
+                // 2秒後にステータスを非表示
+                await Task.Delay(2000);
+                HideStatus();
             }
         }
 
         /// <summary>
-        /// ズーム変更
+        /// カメラ切り替えボタンがクリックされた時
         /// </summary>
-        private void OnZoomChanged(object sender, ValueChangedEventArgs e)
-        {
-            if (CameraView != null)
-            {
-                CameraView.ZoomFactor = (float)e.NewValue;
-            }
-        }
-
-        /// <summary>
-        /// カメラ切り替え（前面/背面）
-        /// </summary>
-        private void OnSwitchCameraClicked(object sender, EventArgs e)
+        private async void OnSwitchCameraClicked(object sender, EventArgs e)
         {
             try
             {
-                // カメラの向きを切り替え
-                if (CameraView.CameraFlashMode == CameraFlashMode.Off)
+                // 利用可能なカメラを取得
+                var cameras = CameraView.AvailableCameras;
+
+                if (cameras != null && cameras.Count > 1)
                 {
-                    // 実装例：カメラの切り替えロジック
+                    // 次のカメラに切り替え
+                    currentCameraIndex = (currentCameraIndex + 1) % cameras.Count;
+                    CameraView.SelectedCamera = cameras[currentCameraIndex];
+
                     ShowStatus("カメラを切り替えました");
+                    await Task.Delay(1500);
+                    HideStatus();
+                }
+                else
+                {
+                    ShowStatus("他のカメラが利用できません");
+                    await Task.Delay(1500);
+                    HideStatus();
                 }
             }
             catch (Exception ex)
             {
                 ShowStatus($"切り替えエラー: {ex.Message}");
+                await DisplayAlert("エラー", $"カメラの切り替えに失敗しました: {ex.Message}", "OK");
             }
         }
 
         /// <summary>
-        /// 戻るボタン
+        /// 戻るボタンがクリックされた時
         /// </summary>
         private async void OnBackClicked(object sender, EventArgs e)
         {
@@ -146,13 +141,17 @@ namespace VisionFocus
         /// <summary>
         /// ステータスメッセージを表示
         /// </summary>
-        private async void ShowStatus(string message)
+        private void ShowStatus(string message)
         {
             StatusLabel.Text = message;
             StatusLabel.IsVisible = true;
+        }
 
-            // 2秒後に非表示
-            await Task.Delay(2000);
+        /// <summary>
+        /// ステータスメッセージを非表示
+        /// </summary>
+        private void HideStatus()
+        {
             StatusLabel.IsVisible = false;
         }
     }
