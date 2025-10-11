@@ -54,9 +54,16 @@
 	<!-- Ensure CapturedImages folder exists and is copied -->
 	<ItemGroup>
 		<None Include="Resources\Raw\CapturedImages\**\*" CopyToOutputDirectory="PreserveNewest" />
+		<None Include="Resources\Data\**\*" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 	<ItemGroup>
 		<Folder Include="Resources\Raw\CapturedImages\" />
+		<Folder Include="Resources\Data\" />
+	</ItemGroup>
+	<ItemGroup>
+	  <MauiAsset Include="Resources\Data\.gitkeep">
+	    <LogicalName>%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
+	  </MauiAsset>
 	</ItemGroup>
 
 </Project>

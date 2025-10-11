@@ -4,7 +4,7 @@
              x:Class="VisionFocus.SettingsPage"
              Title="Settings">
 
-    <Grid RowDefinitions="Auto, *" Padding="20">
+    <Grid RowDefinitions="Auto, *, Auto" Padding="20">
         <!-- Header with Back Button -->
         <Grid Grid.Row="0" ColumnDefinitions="Auto, *" Padding="0,0,0,20">
             <Button Grid.Column="0"
@@ -26,22 +26,258 @@
                    Margin="10,0,0,0" />
         </Grid>
 
-        <!-- Content Area -->
-        <VerticalStackLayout Grid.Row="1"
-                             VerticalOptions="Center"
-                             HorizontalOptions="Center"
-                             Spacing="20">
-            <Label Text="Temporary"
-                   FontSize="32"
-                   FontAttributes="Bold"
-                   HorizontalOptions="Center"
-                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+        <!-- Settings Content -->
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Spacing="25" Padding="0,10,0,10">
 
-            <Label Text="Settings page is under development"
-                   FontSize="16"
-                   HorizontalOptions="Center"
-                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray500}}" />
-        </VerticalStackLayout>
+                <!-- Session Duration -->
+                <Frame BorderColor="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
+                       BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}"
+                       Padding="15"
+                       CornerRadius="10">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="📅 Session Duration"
+                               FontSize="18"
+                               FontAttributes="Bold" />
+
+                        <Grid ColumnDefinitions="*, Auto, Auto" ColumnSpacing="10">
+                            <Slider x:Name="SessionDurationSlider"
+                                    Grid.Column="0"
+                                    Minimum="5"
+                                    Maximum="120"
+                                    Value="25"
+                                    ValueChanged="OnSessionDurationChanged"
+                                    VerticalOptions="Center" />
+
+                            <Label x:Name="SessionDurationLabel"
+                                   Grid.Column="1"
+                                   Text="25"
+                                   FontSize="20"
+                                   FontAttributes="Bold"
+                                   VerticalOptions="Center"
+                                   WidthRequest="40"
+                                   HorizontalTextAlignment="End" />
+
+                            <Label Grid.Column="2"
+                                   Text="minutes"
+                                   FontSize="16"
+                                   VerticalOptions="Center" />
+                        </Grid>
+
+                        <Label Text="Set the duration for your focus session (5-120 minutes)"
+                               FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+                    </VerticalStackLayout>
+                </Frame>
+
+                <!-- Subjects -->
+                <Frame BorderColor="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
+                       BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}"
+                       Padding="15"
+                       CornerRadius="10">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="📚 Subjects"
+                               FontSize="18"
+                               FontAttributes="Bold" />
+
+                        <CollectionView x:Name="SubjectsCollectionView"
+                                      SelectionMode="None"
+                                      HeightRequest="150">
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnDefinitions="*, Auto" Padding="5">
+                                        <Label Grid.Column="0"
+                                               Text="{Binding .}"
+                                               VerticalOptions="Center"
+                                               FontSize="16" />
+
+                                        <Button Grid.Column="1"
+                                                Text="✕"
+                                                Clicked="OnDeleteSubjectClicked"
+                                                CommandParameter="{Binding .}"
+                                                BackgroundColor="#F44336"
+                                                TextColor="White"
+                                                WidthRequest="40"
+                                                HeightRequest="40"
+                                                CornerRadius="20"
+                                                FontSize="16" />
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+
+                        <Grid ColumnDefinitions="*, Auto" ColumnSpacing="10">
+                            <Entry x:Name="NewSubjectEntry"
+                                   Grid.Column="0"
+                                   Placeholder="Enter new subject..."
+                                   FontSize="14" />
+
+                            <Button Grid.Column="1"
+                                    Text="+ Add"
+                                    Clicked="OnAddSubjectClicked"
+                                    BackgroundColor="#4CAF50"
+                                    TextColor="White"
+                                    WidthRequest="80"
+                                    CornerRadius="10" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Frame>
+
+                <!-- Alert Settings -->
+                <Frame BorderColor="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
+                       BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}"
+                       Padding="15"
+                       CornerRadius="10">
+                    <VerticalStackLayout Spacing="15">
+                        <Label Text="🔔 Alert Settings"
+                               FontSize="18"
+                               FontAttributes="Bold" />
+
+                        <!-- Warning Threshold -->
+                        <VerticalStackLayout Spacing="5">
+                            <Label Text="Warning Threshold"
+                                   FontSize="16" />
+
+                            <Grid ColumnDefinitions="*, Auto, Auto" ColumnSpacing="10">
+                                <Slider x:Name="WarningThresholdSlider"
+                                        Grid.Column="0"
+                                        Minimum="1"
+                                        Maximum="10"
+                                        Value="3"
+                                        ValueChanged="OnWarningThresholdChanged"
+                                        VerticalOptions="Center" />
+
+                                <Label x:Name="WarningThresholdLabel"
+                                       Grid.Column="1"
+                                       Text="3.0"
+                                       FontSize="16"
+                                       FontAttributes="Bold"
+                                       VerticalOptions="Center"
+                                       WidthRequest="40"
+                                       HorizontalTextAlignment="End" />
+
+                                <Label Grid.Column="2"
+                                       Text="seconds"
+                                       FontSize="14"
+                                       VerticalOptions="Center" />
+                            </Grid>
+                        </VerticalStackLayout>
+
+                        <!-- Alert Threshold -->
+                        <VerticalStackLayout Spacing="5">
+                            <Label Text="Alert Threshold"
+                                   FontSize="16" />
+
+                            <Grid ColumnDefinitions="*, Auto, Auto" ColumnSpacing="10">
+                                <Slider x:Name="AlertThresholdSlider"
+                                        Grid.Column="0"
+                                        Minimum="2"
+                                        Maximum="15"
+                                        Value="5"
+                                        ValueChanged="OnAlertThresholdChanged"
+                                        VerticalOptions="Center" />
+
+                                <Label x:Name="AlertThresholdLabel"
+                                       Grid.Column="1"
+                                       Text="5.0"
+                                       FontSize="16"
+                                       FontAttributes="Bold"
+                                       VerticalOptions="Center"
+                                       WidthRequest="40"
+                                       HorizontalTextAlignment="End" />
+
+                                <Label Grid.Column="2"
+                                       Text="seconds"
+                                       FontSize="14"
+                                       VerticalOptions="Center" />
+                            </Grid>
+                        </VerticalStackLayout>
+
+                        <Label Text="Eyes closed for this duration will trigger an alert"
+                               FontSize="12"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+                    </VerticalStackLayout>
+                </Frame>
+
+                <!-- Sound Settings -->
+                <Frame BorderColor="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
+                       BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}"
+                       Padding="15"
+                       CornerRadius="10">
+                    <VerticalStackLayout Spacing="15">
+                        <Label Text="🔊 Sound Settings"
+                               FontSize="18"
+                               FontAttributes="Bold" />
+
+                        <!-- Sound Type -->
+                        <VerticalStackLayout Spacing="5">
+                            <Label Text="Alert Sound Type"
+                                   FontSize="16" />
+
+                            <Grid ColumnDefinitions="*, Auto" ColumnSpacing="10">
+                                <Picker x:Name="SoundTypePicker"
+                                        Grid.Column="0"
+                                        FontSize="14"
+                                        SelectedIndexChanged="OnSoundTypeChanged" />
+
+                                <Button Grid.Column="1"
+                                        Text="▶ Test"
+                                        Clicked="OnTestSoundClicked"
+                                        BackgroundColor="#2196F3"
+                                        TextColor="White"
+                                        WidthRequest="80"
+                                        CornerRadius="10" />
+                            </Grid>
+                        </VerticalStackLayout>
+
+                        <!-- Volume -->
+                        <VerticalStackLayout Spacing="5">
+                            <Label Text="Alert Volume"
+                                   FontSize="16" />
+
+                            <Grid ColumnDefinitions="*, Auto" ColumnSpacing="10">
+                                <Slider x:Name="VolumeSlider"
+                                        Grid.Column="0"
+                                        Minimum="0"
+                                        Maximum="1"
+                                        Value="0.8"
+                                        ValueChanged="OnVolumeChanged"
+                                        VerticalOptions="Center" />
+
+                                <Label x:Name="VolumeLabel"
+                                       Grid.Column="1"
+                                       Text="80%"
+                                       FontSize="16"
+                                       FontAttributes="Bold"
+                                       VerticalOptions="Center"
+                                       WidthRequest="50"
+                                       HorizontalTextAlignment="End" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </Frame>
+
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <!-- Save and Reset Buttons -->
+        <Grid Grid.Row="2" ColumnDefinitions="*, *" ColumnSpacing="10" Padding="0,20,0,0">
+            <Button Grid.Column="0"
+                    Text="Reset to Default"
+                    Clicked="OnResetClicked"
+                    BackgroundColor="#FF9800"
+                    TextColor="White"
+                    CornerRadius="10"
+                    FontSize="16" />
+
+            <Button Grid.Column="1"
+                    Text="Save Settings"
+                    Clicked="OnSaveClicked"
+                    BackgroundColor="#4CAF50"
+                    TextColor="White"
+                    CornerRadius="10"
+                    FontSize="16" />
+        </Grid>
     </Grid>
 
 </ContentPage>

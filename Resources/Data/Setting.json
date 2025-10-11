@@ -1,0 +1,12 @@
+{
+  "SessionDurationMinutes": 25,
+  "Subjects": [
+    "Math",
+    "Science",
+    "English"
+  ],
+  "AlertThresholdSeconds": 5,
+  "WarningThresholdSeconds": 3,
+  "AlertSoundType": 0,
+  "AlertVolume": 0.8
+}
