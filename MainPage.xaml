@@ -21,7 +21,7 @@
                              VerticalOptions="Center"
                              HorizontalOptions="Center"
                              WidthRequest="300">
-            <Button Text="📷 Start Camera &amp; Monitoring"
+            <Button Text="📷 Sesseion"
                     Clicked="OnCameraClicked"
                     BackgroundColor="#512BD4"
                     TextColor="White"
@@ -29,7 +29,7 @@
                     FontSize="18"
                     CornerRadius="15" />
 
-            <Button Text="ℹ️ About Monitoring"
+            <Button Text="ℹ️ Statistics"
                     Clicked="OnMonitoringClicked"
                     BackgroundColor="#9C27B0"
                     TextColor="White"
@@ -37,7 +37,7 @@
                     FontSize="18"
                     CornerRadius="15" />
 
-            <Button Text="📁 Gallery"
+            <Button Text="📁 History"
                     Clicked="OnGalleryClicked"
                     BackgroundColor="#4CAF50"
                     TextColor="White"
