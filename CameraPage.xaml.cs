@@ -1,10 +1,13 @@
-#if WINDOWS
+﻿#if WINDOWS
 using Windows.Media.Capture;
+using Windows.Media.Capture.Frames;
 using Windows.Storage.Streams;
 using Windows.Graphics.Imaging;
 using System.Runtime.InteropServices.WindowsRuntime;
-using System.Diagnostics;
+using Windows.Media.Devices;
+using Windows.Media.MediaProperties;
 #endif
+using System.Diagnostics;
 
 namespace VisionFocus
 {
@@ -12,9 +15,11 @@ namespace VisionFocus
     {
 #if WINDOWS
         private MediaCapture? _mediaCapture;
+        private MediaFrameReader? _frameReader;           
         private System.Timers.Timer? _timer;
         private bool _isCapturing = false;
         private byte[]? _latestFrameBytes;
+        private int _captureBusy = 0;                    
 #endif
 
         public CameraPage()
@@ -22,32 +27,27 @@ namespace VisionFocus
             InitializeComponent();
         }
 
-        /// <summary>
-        /// Back button handler
-        /// </summary>
-        private async void OnBackClicked(object sender, EventArgs e)
+
+        protected override async void OnAppearing()
         {
-            StopCamera();
-            await Shell.Current.GoToAsync("..");
+            base.OnAppearing();
+#if WINDOWS
+            if (_mediaCapture == null)
+                await InitializeCameraAsync();
+#endif
         }
 
-        /// <summary>
-        /// Start camera button handler
-        /// </summary>
-        private async void OnStartClicked(object sender, EventArgs e)
-        {
 #if WINDOWS
+        private async Task InitializeCameraAsync()
+        {
             try
             {
                 StatusLabel.Text = "Initializing camera...";
 
-                // Check camera permission
+                // Permission
                 var status = await Permissions.CheckStatusAsync<Permissions.Camera>();
                 if (status != PermissionStatus.Granted)
-                {
                     status = await Permissions.RequestAsync<Permissions.Camera>();
-                }
-
                 if (status != PermissionStatus.Granted)
                 {
                     await DisplayAlert("Error", "Camera permission is required", "OK");
@@ -55,15 +55,22 @@ namespace VisionFocus
                     return;
                 }
 
-                // Initialize MediaCapture
+                // MediaCapture 
                 _mediaCapture = new MediaCapture();
                 var settings = new MediaCaptureInitializationSettings
                 {
-                    StreamingCaptureMode = StreamingCaptureMode.Video
+                    StreamingCaptureMode = StreamingCaptureMode.Video,
+                    PhotoCaptureSource = PhotoCaptureSource.VideoPreview 
                 };
                 await _mediaCapture.InitializeAsync(settings);
 
-                // Capture every second with timer
+                await StartFrameReaderAsync(_mediaCapture);
+
+                await ConfigureCameraAsync(_mediaCapture);
+
+                await Task.Delay(1500);
+
+
                 _timer = new System.Timers.Timer(1000);
                 _timer.Elapsed += async (s, args) => await CaptureFrameAsync();
                 _timer.Start();
@@ -76,25 +83,104 @@ namespace VisionFocus
             }
             catch (Exception ex)
             {
-                await DisplayAlert("Error", $"Failed to start camera: {ex.Message}", "OK");
+                await DisplayAlert("Error", $"Failed to initialize camera: {ex.Message}", "OK");
                 StatusLabel.Text = $"Error: {ex.Message}";
+                Debug.WriteLine(ex);
             }
-#else
-            await DisplayAlert("Error", "This feature is only available on Windows", "OK");
+        }
+
+        private async Task StartFrameReaderAsync(MediaCapture mediaCapture)
+        {
+
+            MediaFrameSource? colorSource = null;
+            foreach (var kv in mediaCapture.FrameSources)
+            {
+                var src = kv.Value;
+                if (src.Info.SourceKind == MediaFrameSourceKind.Color)
+                {
+                    colorSource = src;
+                    break;
+                }
+            }
+
+            if (colorSource != null)
+            {
+                _frameReader = await mediaCapture.CreateFrameReaderAsync(colorSource, MediaEncodingSubtypes.Bgra8);
+                await _frameReader.StartAsync(); 
+            }
+
+        }
+        private async Task ConfigureCameraAsync(MediaCapture mediaCapture)
+        {
+            var v = mediaCapture.VideoDeviceController;
+
+            // 露出はまず完全オート
+            if (v.ExposureControl.Supported)
+                await v.ExposureControl.SetAutoAsync(true);
+
+            // 露出補償は 0.0 に戻す（白飛び時は -0.3〜-0.7 に）
+            if (v.ExposureCompensationControl.Supported)
+                await v.ExposureCompensationControl.SetValueAsync(0.0f);
+
+            // フリッカー（必要に応じて 50/60Hz）
+            v.TrySetPowerlineFrequency(PowerlineFrequency.FiftyHertz);
+
+            // ホワイトバランスはAUTO
+            if (v.WhiteBalanceControl.Supported)
+                await v.WhiteBalanceControl.SetPresetAsync(ColorTemperaturePreset.Auto);
+
+            // フォーカス（連続AF）
+            if (v.FocusControl.Supported)
+            {
+                var focus = v.FocusControl;
+                focus.Configure(new FocusSettings
+                {
+                    Mode = FocusMode.Continuous,
+                    AutoFocusRange = AutoFocusRange.FullRange,
+                    DisableDriverFallback = false
+                });
+                await focus.FocusAsync();
+            }
+
+            // 白飛びを助長する機能は一旦OFFに
+            if (v.BacklightCompensation != null && v.BacklightCompensation.Capabilities.Supported)
+                v.BacklightCompensation.TrySetValue(0); // OFF
+
+            if (v.HdrVideoControl.Supported)
+                v.HdrVideoControl.Mode = HdrVideoMode.Off;
+
+            if (v.VideoTemporalDenoisingControl.Supported)
+                v.VideoTemporalDenoisingControl.Mode = VideoTemporalDenoisingMode.Off;
+
+            // 明るすぎる環境での露出固定（必要時のみ有効化）
+            // if (v.ExposureControl.Supported)
+            // {
+            //     await v.ExposureControl.SetAutoAsync(false);
+            //     await v.ExposureControl.SetValueAsync(TimeSpan.FromMilliseconds(8)); // ≒1/125s
+            // }
+        }
+
+#endif
+
+        private async void OnBackClicked(object sender, EventArgs e)
+        {
+            StopCamera();
+            await Shell.Current.GoToAsync("..");
+        }
+
+        private async void OnStartClicked(object sender, EventArgs e)
+        {
+#if WINDOWS
+            if (_mediaCapture == null)
+                await InitializeCameraAsync();
 #endif
         }
 
-        /// <summary>
-        /// Stop camera button handler
-        /// </summary>
         private void OnStopClicked(object sender, EventArgs e)
         {
             StopCamera();
         }
 
-        /// <summary>
-        /// Capture and save image button handler
-        /// </summary>
         private async void OnCaptureClicked(object sender, EventArgs e)
         {
 #if WINDOWS
@@ -106,11 +192,8 @@ namespace VisionFocus
                     return;
                 }
 
-                // Generate unique filename with date and time
                 string fileName = $"IMG_{DateTime.Now:yyyyMMdd_HHmmss}.jpg";
                 string filePath = ImageHelper.GetImagePath(fileName);
-
-                // Save image to file
                 await File.WriteAllBytesAsync(filePath, _latestFrameBytes);
 
                 await DisplayAlert("Success", $"Image saved successfully!\n{fileName}", "OK");
@@ -120,20 +203,14 @@ namespace VisionFocus
             {
                 await DisplayAlert("Error", $"Failed to save image: {ex.Message}", "OK");
             }
-#else
-            await DisplayAlert("Error", "This feature is only available on Windows", "OK");
 #endif
         }
 
-        /// <summary>
-        /// Open folder button handler
-        /// </summary>
         private async void OnOpenFolderClicked(object sender, EventArgs e)
         {
 #if WINDOWS
             try
             {
-                // Open folder in Windows Explorer
                 string folderPath = ImageHelper.ImagesFolderPath;
                 if (Directory.Exists(folderPath))
                 {
@@ -148,14 +225,46 @@ namespace VisionFocus
             {
                 await DisplayAlert("Error", $"Failed to open folder: {ex.Message}", "OK");
             }
-#else
-            await DisplayAlert("Error", "This feature is only available on Windows", "OK");
 #endif
         }
 
-        /// <summary>
-        /// Common method to stop camera
-        /// </summary>
+        private async void OnJudgeClicked(object sender, EventArgs e)
+        {
+            try
+            {
+                var imagePaths = ImageHelper.GetAllImagePaths();
+                if (imagePaths.Count == 0)
+                {
+                    await DisplayAlert("Error", "No images found. Please capture an image first.", "OK");
+                    return;
+                }
+
+                string latestImagePath = imagePaths[0];
+                string fileName = Path.GetFileName(latestImagePath);
+
+                JudgeButton.IsEnabled = false;
+                JudgeButton.Text = "⏳ Processing...";
+                ResultContainer.IsVisible = true;
+                ResultLabel.Text = "Sending image to Roboflow API...\nPlease wait...";
+
+                string jsonResponse = await RoboflowService.InferImageAsync(latestImagePath);
+                string parsedResult = RoboflowService.ParseResponse(jsonResponse);
+
+                ResultLabel.Text = $"Image: {fileName}\n\n{parsedResult}";
+                Debug.WriteLine($"API Response: {jsonResponse}");
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Error", $"Failed to process image: {ex.Message}", "OK");
+                ResultLabel.Text = $"Error: {ex.Message}";
+            }
+            finally
+            {
+                JudgeButton.IsEnabled = true;
+                JudgeButton.Text = "🔍 Judge Latest Image";
+            }
+        }
+
         private void StopCamera()
         {
 #if WINDOWS
@@ -165,8 +274,18 @@ namespace VisionFocus
                 _timer?.Dispose();
                 _timer = null;
 
-                _mediaCapture?.Dispose();
-                _mediaCapture = null;
+                if (_frameReader != null)
+                {
+                    try { _frameReader.StopAsync().AsTask().Wait(500); } catch { }
+                    _frameReader.Dispose();
+                    _frameReader = null;
+                }
+
+                if (_mediaCapture != null)
+                {
+                    _mediaCapture.Dispose();
+                    _mediaCapture = null;
+                }
 
                 _isCapturing = false;
                 _latestFrameBytes = null;
@@ -191,31 +310,24 @@ namespace VisionFocus
         }
 
 #if WINDOWS
-        /// <summary>
-        /// Capture and display one frame from camera
-        /// </summary>
+
         private async Task CaptureFrameAsync()
         {
-            if (_mediaCapture == null || !_isCapturing)
-                return;
+            if (_mediaCapture == null || !_isCapturing) return;
+            if (Interlocked.Exchange(ref _captureBusy, 1) == 1) return; 
 
             try
             {
-                // Capture to memory stream
                 using var stream = new InMemoryRandomAccessStream();
                 await _mediaCapture.CapturePhotoToStreamAsync(
                     Windows.Media.MediaProperties.ImageEncodingProperties.CreateJpeg(),
                     stream);
 
-                // Decode image
                 stream.Seek(0);
                 var decoder = await BitmapDecoder.CreateAsync(stream);
-
-                // Get pixel data
                 var pixelData = await decoder.GetPixelDataAsync();
                 var pixels = pixelData.DetachPixelData();
 
-                // Re-encode to JPEG
                 using var outputStream = new InMemoryRandomAccessStream();
                 var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.JpegEncoderId, outputStream);
                 encoder.SetPixelData(
@@ -228,15 +340,12 @@ namespace VisionFocus
                     pixels);
                 await encoder.FlushAsync();
 
-                // Convert to byte array
-                var bytes = new byte[outputStream.Size];
+                var bytes = new byte[(int)outputStream.Size];
                 outputStream.Seek(0);
                 await outputStream.ReadAsync(bytes.AsBuffer(), (uint)bytes.Length, InputStreamOptions.None);
 
-                // Store latest frame for saving
                 _latestFrameBytes = bytes;
 
-                // Update UI on main thread
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
                     CameraPreview.Source = ImageSource.FromStream(() => new MemoryStream(bytes));
@@ -246,13 +355,16 @@ namespace VisionFocus
             {
                 Debug.WriteLine($"Capture error: {ex.Message}");
             }
+            finally
+            {
+                Interlocked.Exchange(ref _captureBusy, 0);
+            }
         }
 #endif
 
         protected override void OnDisappearing()
         {
             base.OnDisappearing();
-            // Stop when leaving the page
             StopCamera();
         }
     }

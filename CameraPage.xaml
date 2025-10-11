@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="VisionFocus.CameraPage"
              Title="Camera">
+    
     <Grid RowDefinitions="Auto, *, Auto" Padding="20">
         <!-- Title -->
         <VerticalStackLayout Grid.Row="0" Spacing="10" Margin="0,0,0,20">
@@ -42,7 +43,7 @@
         </Border>
 
         <!-- Control Buttons -->
-        <Grid Grid.Row="2" RowDefinitions="Auto, Auto" RowSpacing="10">
+        <Grid Grid.Row="2" RowDefinitions="Auto, Auto, Auto, Auto" RowSpacing="10">
             <!-- First Row: Back, Start, Stop -->
             <Grid Grid.Row="0" ColumnDefinitions="*, *, *" ColumnSpacing="10">
                 <Button x:Name="BackButton"
@@ -95,6 +96,37 @@
                         HeightRequest="50"
                         FontSize="16" />
             </Grid>
+
+            <!-- Third Row: Judge Button -->
+            <Button x:Name="JudgeButton"
+                    Grid.Row="2"
+                    Text="🔍 Judge Latest Image"
+                    Clicked="OnJudgeClicked"
+                    BackgroundColor="#9C27B0"
+                    TextColor="White"
+                    HeightRequest="50"
+                    FontSize="16" />
+
+            <!-- Fourth Row: Result Display -->
+            <Border Grid.Row="3"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray950}}"
+                    StrokeThickness="1"
+                    Stroke="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
+                    Padding="15"
+                    MinimumHeightRequest="100"
+                    IsVisible="False"
+                    x:Name="ResultContainer">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="10" />
+                </Border.StrokeShape>
+                <ScrollView>
+                    <Label x:Name="ResultLabel"
+                           Text=""
+                           TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"
+                           FontSize="14"
+                           LineBreakMode="WordWrap" />
+                </ScrollView>
+            </Border>
         </Grid>
     </Grid>
 </ContentPage>
