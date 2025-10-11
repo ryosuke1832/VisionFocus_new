@@ -28,6 +28,15 @@
                     HeightRequest="60"
                     FontSize="18"
                     CornerRadius="15" />
+
+            <Button Text="🔄Continiou judge"
+                    Clicked="OnMonitoringClicked"
+                    BackgroundColor="#9C27B0"
+                    TextColor="White"
+                    HeightRequest="60"
+                    FontSize="18"
+                    CornerRadius="15" />
+
             <Button Text="📁 Gallery"
                     Clicked="OnGalleryClicked"
                     BackgroundColor="#4CAF50"
@@ -35,6 +44,7 @@
                     HeightRequest="60"
                     FontSize="18"
                     CornerRadius="15" />
+
             <Button Text="⚙️ Settings"
                     Clicked="OnSettingsClicked"
                     BackgroundColor="#2196F3"
@@ -42,6 +52,7 @@
                     HeightRequest="60"
                     FontSize="18"
                     CornerRadius="15" />
+
             <Label Text="Version 1.0"
                    HorizontalOptions="Center"
                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"

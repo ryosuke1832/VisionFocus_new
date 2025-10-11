@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="VisionFocus.MonitoringPage"
+             Title="Monitoring">
+
+    <Grid RowDefinitions="Auto, Auto, *, Auto" Padding="20">
+
+        <!-- Title -->
+        <VerticalStackLayout Grid.Row="0" Spacing="10" Margin="0,0,0,20">
+            <Label Text="Eye State Monitoring"
+                   Style="{StaticResource Headline}"
+                   SemanticProperties.HeadingLevel="Level1" />
+            <Label Text="Automatic monitoring every 4 seconds"
+                   Style="{StaticResource SubHeadline}"
+                   SemanticProperties.HeadingLevel="Level2" />
+        </VerticalStackLayout>
+
+        <!-- Status Display -->
+        <Border Grid.Row="1"
+                BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray950}}"
+                StrokeThickness="1"
+                Stroke="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
+                Padding="15"
+                Margin="0,0,0,15">
+            <Border.StrokeShape>
+                <RoundRectangle CornerRadius="10" />
+            </Border.StrokeShape>
+            <Label x:Name="StatusLabel"
+                   Text="Press Start to begin monitoring"
+                   TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"
+                   FontSize="16"
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center" />
+        </Border>
+
+        <!-- Log Display Area -->
+        <Border Grid.Row="2"
+                BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}"
+                StrokeThickness="1"
+                Stroke="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
+                Margin="0,0,0,15">
+            <Border.StrokeShape>
+                <RoundRectangle CornerRadius="10" />
+            </Border.StrokeShape>
+            <ScrollView x:Name="LogScrollView">
+                <VerticalStackLayout x:Name="LogContainer"
+                                   Padding="10"
+                                   Spacing="5" />
+            </ScrollView>
+        </Border>
+
+        <!-- Control Buttons -->
+        <Grid Grid.Row="3" ColumnDefinitions="*, *, *" ColumnSpacing="10">
+
+            <!-- Back Button -->
+            <Button x:Name="BackButton"
+                    Grid.Column="0"
+                    Text="← Back"
+                    Clicked="OnBackClicked"
+                    BackgroundColor="#757575"
+                    TextColor="White"
+                    HeightRequest="50"
+                    FontSize="16" />
+
+            <!-- Start Button -->
+            <Button x:Name="StartButton"
+                    Grid.Column="1"
+                    Text="▶ Start"
+                    Clicked="OnStartClicked"
+                    BackgroundColor="#4CAF50"
+                    TextColor="White"
+                    HeightRequest="50"
+                    FontSize="16" />
+
+            <!-- Stop Button -->
+            <Button x:Name="StopButton"
+                    Grid.Column="2"
+                    Text="⏹ Stop"
+                    Clicked="OnStopClicked"
+                    BackgroundColor="#F44336"
+                    TextColor="White"
+                    HeightRequest="50"
+                    FontSize="16"
+                    IsEnabled="False" />
+        </Grid>
+    </Grid>
+</ContentPage>

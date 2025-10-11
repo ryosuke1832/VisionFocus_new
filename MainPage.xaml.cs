@@ -12,7 +12,15 @@
         /// </summary>
         private async void OnCameraClicked(object sender, EventArgs e)
         {
-            await Shell.Current.GoToAsync("//CameraPage");
+            await Shell.Current.GoToAsync(nameof(CameraPage));
+        }
+
+        /// <summary>
+        /// Navigate to Monitoring Page 
+        /// </summary>
+        private async void OnMonitoringClicked(object sender, EventArgs e)
+        {
+            await Shell.Current.GoToAsync(nameof(MonitoringPage));
         }
 
         /// <summary>
