@@ -12,6 +12,8 @@ using MauiThickness = Microsoft.Maui.Thickness;
 #endif
 
 using System.Diagnostics;
+using VisionFocus.Services;
+using VisionFocus.Utilities;
 
 namespace VisionFocus
 {
