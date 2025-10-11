@@ -1,12 +1,14 @@
-﻿#if WINDOWS
+﻿// CameraPage.xaml.cs - 置き換え版（Windows最適化、無駄な再エンコード排除）
+
+#if WINDOWS
 using Windows.Media.Capture;
-using Windows.Media.Capture.Frames;
 using Windows.Storage.Streams;
-using Windows.Graphics.Imaging;
-using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Media.Devices;
 using Windows.Media.MediaProperties;
+using Microsoft.UI.Xaml; // DispatcherTimer
+using System.Runtime.InteropServices.WindowsRuntime;
 #endif
+
 using System.Diagnostics;
 
 namespace VisionFocus
@@ -15,21 +17,26 @@ namespace VisionFocus
     {
 #if WINDOWS
         private MediaCapture? _mediaCapture;
-        private MediaFrameReader? _frameReader;           
-        private System.Timers.Timer? _timer;
-        private bool _isCapturing = false;
-        private byte[]? _latestFrameBytes;
-        private int _captureBusy = 0;
-#endif
-#if WINDOWS
-        private float _expComp = 0.0f;  
+        private DispatcherTimer? _timer;
+        private volatile bool _isCapturing = false;
+        private readonly SemaphoreSlim _captureGate = new(1, 1);
+        private byte[]? _latestJpegBytes;
+
+        // 露出補正の目安（白飛び対策）
+        private float _expComp = -1.0f;
+
+        // タイマーフレーム間隔（ms）: 100ms ≒ 10fps
+        private const int PreviewIntervalMs = 100;
+
+        // 目標解像度（存在しなければ最も近いものを選ぶ）
+        private const uint TargetWidth = 1280;
+        private const uint TargetHeight = 720;
 #endif
 
         public CameraPage()
         {
             InitializeComponent();
         }
-
 
         protected override async void OnAppearing()
         {
@@ -45,121 +52,186 @@ namespace VisionFocus
         {
             try
             {
-                StatusLabel.Text = "Initializing camera...";
+                StatusLabel.IsVisible = true;
+                StatusLabel.Text = "カメラを初期化中...";
 
-                // Permission
-                var status = await Permissions.CheckStatusAsync<Permissions.Camera>();
-                if (status != PermissionStatus.Granted)
-                    status = await Permissions.RequestAsync<Permissions.Camera>();
-                if (status != PermissionStatus.Granted)
-                {
-                    await DisplayAlert("Error", "Camera permission is required", "OK");
-                    StatusLabel.Text = "Permission error";
-                    return;
-                }
-
-                // MediaCapture 
+                // MediaCapture 初期化
                 _mediaCapture = new MediaCapture();
                 var settings = new MediaCaptureInitializationSettings
                 {
                     StreamingCaptureMode = StreamingCaptureMode.Video,
-                    PhotoCaptureSource = PhotoCaptureSource.VideoPreview 
+                    PhotoCaptureSource = PhotoCaptureSource.VideoPreview
                 };
                 await _mediaCapture.InitializeAsync(settings);
 
-                await StartFrameReaderAsync(_mediaCapture);
-
                 await ConfigureCameraAsync(_mediaCapture);
 
-                await Task.Delay(1500);
-
-
-                _timer = new System.Timers.Timer(1000);
-                _timer.Elapsed += async (s, args) => await CaptureFrameAsync();
+                // タイマープレビュー開始（10fps）
+                _timer = new DispatcherTimer();
+                _timer.Interval = TimeSpan.FromMilliseconds(PreviewIntervalMs);
+                _timer.Tick += async (_, __) => await CaptureFrameAsync();
                 _timer.Start();
 
                 _isCapturing = true;
+
+                // UI
                 StartButton.IsEnabled = false;
                 StopButton.IsEnabled = true;
                 CaptureButton.IsEnabled = true;
                 StatusLabel.IsVisible = false;
+
+                Debug.WriteLine("✅ ライブプレビュー開始（DispatcherTimer 10fps）");
             }
             catch (Exception ex)
             {
-                await DisplayAlert("Error", $"Failed to initialize camera: {ex.Message}", "OK");
-                StatusLabel.Text = $"Error: {ex.Message}";
+                await DisplayAlert("エラー", $"カメラの初期化に失敗: {ex.Message}", "OK");
+                StatusLabel.Text = $"エラー: {ex.Message}";
+                StatusLabel.IsVisible = true;
                 Debug.WriteLine(ex);
             }
         }
 
-        private async Task StartFrameReaderAsync(MediaCapture mediaCapture)
-        {
-
-            MediaFrameSource? colorSource = null;
-            foreach (var kv in mediaCapture.FrameSources)
-            {
-                var src = kv.Value;
-                if (src.Info.SourceKind == MediaFrameSourceKind.Color)
-                {
-                    colorSource = src;
-                    break;
-                }
-            }
-
-            if (colorSource != null)
-            {
-                _frameReader = await mediaCapture.CreateFrameReaderAsync(colorSource, MediaEncodingSubtypes.Bgra8);
-                await _frameReader.StartAsync(); 
-            }
-
-        }
         private async Task ConfigureCameraAsync(MediaCapture mediaCapture)
         {
-            var v = mediaCapture.VideoDeviceController;
+            var vdc = mediaCapture.VideoDeviceController;
 
-            if (v.ExposureControl.Supported)
-                await v.ExposureControl.SetAutoAsync(true);
-            if (v.IsoSpeedControl.Supported)
-                await v.IsoSpeedControl.SetAutoAsync();
-
-
-            _expComp = -0.7f; 
-            if (v.ExposureCompensationControl.Supported)
-                await v.ExposureCompensationControl.SetValueAsync(_expComp);
-
-            v.TrySetPowerlineFrequency(PowerlineFrequency.FiftyHertz);
-
-            if (v.WhiteBalanceControl.Supported)
-                await v.WhiteBalanceControl.SetPresetAsync(ColorTemperaturePreset.Auto);
-
-            if (v.FocusControl.Supported)
+            // 実用解像度を優先的に設定（例：1280x720）
+            try
             {
-                var focus = v.FocusControl;
-                focus.Configure(new FocusSettings
+                var all = vdc.GetAvailableMediaStreamProperties(MediaStreamType.VideoPreview)
+                             .OfType<VideoEncodingProperties>()
+                             .ToList();
+
+                // 1280x720 優先、なければ面積が小さい順で最初
+                var target = all.FirstOrDefault(p => p.Width == TargetWidth && p.Height == TargetHeight)
+                          ?? all.OrderBy(p => (long)p.Width * p.Height).FirstOrDefault();
+
+                if (target != null)
                 {
-                    Mode = FocusMode.Continuous,
-                    AutoFocusRange = AutoFocusRange.FullRange,
-                    DisableDriverFallback = false
-                });
-                await focus.FocusAsync();
+                    await vdc.SetMediaStreamPropertiesAsync(MediaStreamType.VideoPreview, target);
+                    Debug.WriteLine($"📷 Preview Properties: {target.Subtype} {target.Width}x{target.Height} @{target.FrameRate.Numerator}/{target.FrameRate.Denominator}");
+                }
             }
-
-
-            if (v.BacklightCompensation != null && v.BacklightCompensation.Capabilities.Supported)
-                v.BacklightCompensation.TrySetValue(0); 
-            if (v.HdrVideoControl.Supported)
-                v.HdrVideoControl.Mode = HdrVideoMode.Off;
-            if (v.VideoTemporalDenoisingControl.Supported)
-                v.VideoTemporalDenoisingControl.Mode = VideoTemporalDenoisingMode.Off;
-
-             if (v.ExposureControl.Supported)
+            catch (Exception ex)
             {
-                await v.ExposureControl.SetAutoAsync(false);
-                await v.ExposureControl.SetValueAsync(TimeSpan.FromMilliseconds(6)); // ≒1/166s
+                Debug.WriteLine($"解像度設定に失敗: {ex.Message}");
             }
+
+            // 電源周波数（フリッカ抑制）
+            try
+            {
+                vdc.TrySetPowerlineFrequency(PowerlineFrequency.FiftyHertz);
+            }
+            catch { /* ignore */ }
+
+            // 自動露出 & ISO
+            try
+            {
+                if (vdc.ExposureControl.Supported)
+                    await vdc.ExposureControl.SetAutoAsync(true);
+
+                if (vdc.IsoSpeedControl.Supported)
+                    await vdc.IsoSpeedControl.SetAutoAsync();
+            }
+            catch { /* ignore */ }
+
+            // 露出補正（範囲内に収めて設定）
+            try
+            {
+                if (vdc.ExposureCompensationControl.Supported)
+                {
+                    var min = vdc.ExposureCompensationControl.Min;
+                    var max = vdc.ExposureCompensationControl.Max;
+                    var step = vdc.ExposureCompensationControl.Step;
+
+                    var clamped = Math.Max(min, Math.Min(max, _expComp));
+                    await vdc.ExposureCompensationControl.SetValueAsync(clamped);
+
+                    Debug.WriteLine($"露出補正: {clamped} (range {min}..{max}, step {step})");
+                }
+            }
+            catch { /* ignore */ }
+
+            // WB/フォーカス等（対応デバイスのみ）
+            try
+            {
+                if (vdc.WhiteBalanceControl.Supported)
+                    await vdc.WhiteBalanceControl.SetPresetAsync(ColorTemperaturePreset.Auto);
+            }
+            catch { /* ignore */ }
+
+            try
+            {
+                if (vdc.FocusControl.Supported)
+                {
+                    var focus = vdc.FocusControl;
+                    focus.Configure(new FocusSettings
+                    {
+                        Mode = FocusMode.Continuous,
+                        AutoFocusRange = AutoFocusRange.FullRange,
+                        DisableDriverFallback = false
+                    });
+                    await focus.FocusAsync();
+                }
+            }
+            catch { /* ignore */ }
+
+            try
+            {
+                if (vdc.BacklightCompensation != null && vdc.BacklightCompensation.Capabilities.Supported)
+                    vdc.BacklightCompensation.TrySetValue(0);
+
+                if (vdc.HdrVideoControl.Supported)
+                    vdc.HdrVideoControl.Mode = HdrVideoMode.Off;
+
+                if (vdc.VideoTemporalDenoisingControl.Supported)
+                    vdc.VideoTemporalDenoisingControl.Mode = VideoTemporalDenoisingMode.Off;
+            }
+            catch { /* ignore */ }
         }
 
+        /// <summary>
+        /// タイマーで JPEG 1枚をキャプチャして Image に表示。
+        /// ※「プレビュー用途」では本来は CaptureElement/FrameReader が理想だが、
+        ///   既存XAML(Image)を活かすため JPEG 直出し＋FromStream で最小変更。
+        ///   ここでは「再デコード→再エンコード」は一切行わない。
+        /// </summary>
+        private async Task CaptureFrameAsync()
+        {
+            if (_mediaCapture == null || !_isCapturing) return;
 
+            if (!await _captureGate.WaitAsync(0))
+                return;
+
+            try
+            {
+                using var stream = new InMemoryRandomAccessStream();
+                await _mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreateJpeg(), stream);
+
+                // そのままバイト列へ（デコード/再エンコードなし）
+                stream.Seek(0);
+                using var netStream = stream.AsStreamForRead();
+                using var ms = new MemoryStream();
+                await netStream.CopyToAsync(ms);
+                var bytes = ms.ToArray();
+
+                _latestJpegBytes = bytes;
+
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                {
+                    // 短命 Stream を毎回作るのはGCに厳しいが、最小変更で維持
+                    CameraPreview.Source = ImageSource.FromStream(() => new MemoryStream(bytes));
+                });
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Capture error: {ex.Message}");
+            }
+            finally
+            {
+                _captureGate.Release();
+            }
+        }
 #endif
 
         private async void OnBackClicked(object sender, EventArgs e)
@@ -186,23 +258,25 @@ namespace VisionFocus
 #if WINDOWS
             try
             {
-                if (_latestFrameBytes == null || _latestFrameBytes.Length == 0)
+                if (_latestJpegBytes == null || _latestJpegBytes.Length == 0)
                 {
-                    await DisplayAlert("Error", "No frame available to save", "OK");
+                    await DisplayAlert("エラー", "保存可能なフレームがありません", "OK");
                     return;
                 }
 
                 string fileName = $"IMG_{DateTime.Now:yyyyMMdd_HHmmss}.jpg";
                 string filePath = ImageHelper.GetImagePath(fileName);
-                await File.WriteAllBytesAsync(filePath, _latestFrameBytes);
+                await File.WriteAllBytesAsync(filePath, _latestJpegBytes);
 
-                await DisplayAlert("Success", $"Image saved successfully!\n{fileName}", "OK");
-                Debug.WriteLine($"Image saved: {filePath}");
+                await DisplayAlert("成功", $"画像を保存しました！\n{fileName}", "OK");
+                Debug.WriteLine($"画像保存: {filePath}");
             }
             catch (Exception ex)
             {
-                await DisplayAlert("Error", $"Failed to save image: {ex.Message}", "OK");
+                await DisplayAlert("エラー", $"画像の保存に失敗: {ex.Message}", "OK");
             }
+#else
+            await DisplayAlert("未対応", "この機能は Windows でのみ動作します。", "OK");
 #endif
         }
 
@@ -214,17 +288,20 @@ namespace VisionFocus
                 string folderPath = ImageHelper.ImagesFolderPath;
                 if (Directory.Exists(folderPath))
                 {
+                    // フォルダをエクスプローラで開く
                     Process.Start("explorer.exe", folderPath);
                 }
                 else
                 {
-                    await DisplayAlert("Error", "Folder does not exist", "OK");
+                    await DisplayAlert("エラー", "フォルダが存在しません", "OK");
                 }
             }
             catch (Exception ex)
             {
-                await DisplayAlert("Error", $"Failed to open folder: {ex.Message}", "OK");
+                await DisplayAlert("エラー", $"フォルダを開けませんでした: {ex.Message}", "OK");
             }
+#else
+            await DisplayAlert("未対応", "この機能は Windows でのみ動作します。", "OK");
 #endif
         }
 
@@ -235,7 +312,7 @@ namespace VisionFocus
                 var imagePaths = ImageHelper.GetAllImagePaths();
                 if (imagePaths.Count == 0)
                 {
-                    await DisplayAlert("Error", "No images found. Please capture an image first.", "OK");
+                    await DisplayAlert("エラー", "画像が見つかりません。先に画像をキャプチャしてください。", "OK");
                     return;
                 }
 
@@ -243,25 +320,25 @@ namespace VisionFocus
                 string fileName = Path.GetFileName(latestImagePath);
 
                 JudgeButton.IsEnabled = false;
-                JudgeButton.Text = "⏳ Processing...";
+                JudgeButton.Text = "⏳ 処理中...";
                 ResultContainer.IsVisible = true;
-                ResultLabel.Text = "Sending image to Roboflow API...\nPlease wait...";
+                ResultLabel.Text = "Roboflow APIに画像を送信中...\nお待ちください...";
 
                 string jsonResponse = await RoboflowService.InferImageAsync(latestImagePath);
                 string parsedResult = RoboflowService.ParseResponse(jsonResponse);
 
-                ResultLabel.Text = $"Image: {fileName}\n\n{parsedResult}";
-                Debug.WriteLine($"API Response: {jsonResponse}");
+                ResultLabel.Text = $"画像: {fileName}\n\n{parsedResult}";
+                Debug.WriteLine($"API応答: {jsonResponse}");
             }
             catch (Exception ex)
             {
-                await DisplayAlert("Error", $"Failed to process image: {ex.Message}", "OK");
-                ResultLabel.Text = $"Error: {ex.Message}";
+                await DisplayAlert("エラー", $"画像の処理に失敗: {ex.Message}", "OK");
+                ResultLabel.Text = $"エラー: {ex.Message}";
             }
             finally
             {
                 JudgeButton.IsEnabled = true;
-                JudgeButton.Text = "🔍 Judge Latest Image";
+                JudgeButton.Text = "🔍 最新画像を判定";
             }
         }
 
@@ -270,97 +347,45 @@ namespace VisionFocus
 #if WINDOWS
             try
             {
+                _isCapturing = false;
+
+                // タイマー停止
                 _timer?.Stop();
-                _timer?.Dispose();
                 _timer = null;
 
-                if (_frameReader != null)
-                {
-                    try { _frameReader.StopAsync().AsTask().Wait(500); } catch { }
-                    _frameReader.Dispose();
-                    _frameReader = null;
-                }
+                // 直前フレームの完了待ち（最大500ms）
+                SpinWait.SpinUntil(() =>
+                    _captureGate.CurrentCount == 1, millisecondsTimeout: 500);
 
-                if (_mediaCapture != null)
-                {
-                    _mediaCapture.Dispose();
-                    _mediaCapture = null;
-                }
+                // MediaCapture 破棄
+                _mediaCapture?.Dispose();
+                _mediaCapture = null;
 
-                _isCapturing = false;
-                _latestFrameBytes = null;
+                _latestJpegBytes = null;
 
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
                     StartButton.IsEnabled = true;
                     StopButton.IsEnabled = false;
                     CaptureButton.IsEnabled = false;
-                    StatusLabel.Text = "Stopped";
+                    StatusLabel.Text = "停止";
                     StatusLabel.IsVisible = true;
+
+                    // 画面も黒にしたい場合は以下
+                    // CameraPreview.Source = null;
                 });
             }
             catch (Exception ex)
             {
                 MainThread.BeginInvokeOnMainThread(async () =>
                 {
-                    await DisplayAlert("Error", $"An error occurred while stopping: {ex.Message}", "OK");
+                    await DisplayAlert("エラー", $"停止中にエラーが発生: {ex.Message}", "OK");
                 });
             }
+#else
+            // 他プラットフォームは何もしない
 #endif
         }
-
-#if WINDOWS
-
-        private async Task CaptureFrameAsync()
-        {
-            if (_mediaCapture == null || !_isCapturing) return;
-            if (Interlocked.Exchange(ref _captureBusy, 1) == 1) return; 
-
-            try
-            {
-                using var stream = new InMemoryRandomAccessStream();
-                await _mediaCapture.CapturePhotoToStreamAsync(
-                    Windows.Media.MediaProperties.ImageEncodingProperties.CreateJpeg(),
-                    stream);
-
-                stream.Seek(0);
-                var decoder = await BitmapDecoder.CreateAsync(stream);
-                var pixelData = await decoder.GetPixelDataAsync();
-                var pixels = pixelData.DetachPixelData();
-
-                using var outputStream = new InMemoryRandomAccessStream();
-                var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.JpegEncoderId, outputStream);
-                encoder.SetPixelData(
-                    BitmapPixelFormat.Bgra8,
-                    BitmapAlphaMode.Ignore,
-                    decoder.PixelWidth,
-                    decoder.PixelHeight,
-                    decoder.DpiX,
-                    decoder.DpiY,
-                    pixels);
-                await encoder.FlushAsync();
-
-                var bytes = new byte[(int)outputStream.Size];
-                outputStream.Seek(0);
-                await outputStream.ReadAsync(bytes.AsBuffer(), (uint)bytes.Length, InputStreamOptions.None);
-
-                _latestFrameBytes = bytes;
-
-                await MainThread.InvokeOnMainThreadAsync(() =>
-                {
-                    CameraPreview.Source = ImageSource.FromStream(() => new MemoryStream(bytes));
-                });
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Capture error: {ex.Message}");
-            }
-            finally
-            {
-                Interlocked.Exchange(ref _captureBusy, 0);
-            }
-        }
-#endif
 
         protected override void OnDisappearing()
         {
