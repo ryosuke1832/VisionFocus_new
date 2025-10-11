@@ -2,113 +2,113 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="VisionFocus.CameraPage"
-             Title="Camera">
-    
-    <Grid RowDefinitions="Auto, *, Auto" Padding="20">
-        <!-- Title -->
-        <VerticalStackLayout Grid.Row="0" Spacing="10" Margin="0,0,0,20">
-            <Label Text="Real-time Camera"
-                   Style="{StaticResource Headline}"
-                   SemanticProperties.HeadingLevel="Level1" />
-            <Label Text="Camera Preview"
-                   Style="{StaticResource SubHeadline}"
-                   SemanticProperties.HeadingLevel="Level2" />
-        </VerticalStackLayout>
+             Title="SessionMode">
+
+    <Grid RowDefinitions="Auto, *, Auto" Padding="0">
+        <!-- Header Area -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" Padding="20,20,20,10">
+            <!-- Back Button (Left) -->
+            <Button x:Name="BackButton"
+                    Grid.Column="0"
+                    Text="←"
+                    Clicked="OnBackClicked"
+                    BackgroundColor="Transparent"
+                    TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"
+                    FontSize="32"
+                    WidthRequest="50"
+                    HeightRequest="50"
+                    Padding="0"
+                    Margin="0" />
+
+            <!-- Info Area (Right) -->
+            <VerticalStackLayout Grid.Column="2" 
+                               Spacing="5"
+                               HorizontalOptions="End"
+                               VerticalOptions="Start">
+                <Label Text="Subject: Temp"
+                       TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"
+                       FontSize="16"
+                       HorizontalOptions="End" />
+                <Label x:Name="TimerLabel"
+                       Text="25:00"
+                       TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"
+                       FontSize="24"
+                       FontAttributes="Bold"
+                       HorizontalOptions="End" />
+            </VerticalStackLayout>
+        </Grid>
 
         <!-- Camera Preview -->
         <Border Grid.Row="1"
                 BackgroundColor="Black"
                 StrokeThickness="0"
-                Margin="0,0,0,20">
+                Margin="20,0,20,0">
             <Border.StrokeShape>
                 <RoundRectangle CornerRadius="10" />
             </Border.StrokeShape>
-            <Grid>
-                <!-- Camera Image -->
-                <Image x:Name="CameraPreview"
-                       Aspect="AspectFit"
-                       HorizontalOptions="Fill"
-                       VerticalOptions="Fill" />
-
-                <!-- Status Display -->
-                <Label x:Name="StatusLabel"
-                       Text="Please start the camera"
-                       TextColor="White"
-                       BackgroundColor="#80000000"
-                       Padding="10"
-                       HorizontalOptions="Center"
-                       VerticalOptions="Center"
-                       FontSize="18" />
-            </Grid>
+            <Image x:Name="CameraPreview"
+                   Aspect="AspectFit"
+                   HorizontalOptions="Fill"
+                   VerticalOptions="Fill" />
         </Border>
 
-        <!-- Control Buttons -->
-        <Grid Grid.Row="2" RowDefinitions="Auto, Auto, Auto, Auto" RowSpacing="10">
-            <!-- First Row: Back, Start, Stop -->
-            <Grid Grid.Row="0" ColumnDefinitions="*, *, *" ColumnSpacing="10">
-                <Button x:Name="BackButton"
-                        Grid.Column="0"
-                        Text="← Back"
-                        Clicked="OnBackClicked"
-                        BackgroundColor="#757575"
-                        TextColor="White"
-                        HeightRequest="50"
-                        FontSize="16" />
+        <!-- Control Buttons Area -->
+        <Grid Grid.Row="2" Padding="20">
+            <!-- Start Button (Red Circle) -->
+            <Button x:Name="StartButton"
+                    Text="Start"
+                    Clicked="OnStartClicked"
+                    BackgroundColor="#F44336"
+                    TextColor="White"
+                    WidthRequest="100"
+                    HeightRequest="100"
+                    CornerRadius="50"
+                    FontSize="16"
+                    FontAttributes="Bold"
+                    HorizontalOptions="Center"
+                    VerticalOptions="Center" />
 
-                <Button x:Name="StartButton"
-                        Grid.Column="1"
-                        Text="📷 Start"
-                        Clicked="OnStartClicked"
-                        BackgroundColor="#512BD4"
-                        TextColor="White"
-                        HeightRequest="50"
-                        FontSize="16" />
-
-                <Button x:Name="StopButton"
-                        Grid.Column="2"
-                        Text="⏹ Stop"
-                        Clicked="OnStopClicked"
-                        BackgroundColor="#F44336"
-                        TextColor="White"
-                        HeightRequest="50"
-                        FontSize="16"
-                        IsEnabled="False" />
-            </Grid>
-
-            <!-- Second Row: Capture and Open Folder -->
-            <Grid Grid.Row="1" ColumnDefinitions="*, *" ColumnSpacing="10">
-                <Button x:Name="CaptureButton"
-                        Grid.Column="0"
-                        Text="💾 Capture &amp; Save"
-                        Clicked="OnCaptureClicked"
-                        BackgroundColor="#4CAF50"
-                        TextColor="White"
-                        HeightRequest="50"
-                        FontSize="16"
-                        IsEnabled="False" />
-
-                <Button x:Name="OpenFolderButton"
-                        Grid.Column="1"
-                        Text="📁 Open Folder"
-                        Clicked="OnOpenFolderClicked"
+            <!-- Control Buttons (Pause and Stop) - Hidden initially -->
+            <HorizontalStackLayout x:Name="ControlButtons"
+                                 IsVisible="False"
+                                 Spacing="30"
+                                 HorizontalOptions="Center"
+                                 VerticalOptions="Center">
+                <Button x:Name="PauseButton"
+                        Text="⏸"
+                        Clicked="OnPauseClicked"
                         BackgroundColor="#FF9800"
                         TextColor="White"
-                        HeightRequest="50"
-                        FontSize="16" />
-            </Grid>
+                        WidthRequest="80"
+                        HeightRequest="80"
+                        CornerRadius="40"
+                        FontSize="32" />
 
-            <!-- Third Row: Judge Button -->
+                <Button x:Name="StopButton"
+                        Text="⏹"
+                        Clicked="OnStopClicked"
+                        BackgroundColor="#757575"
+                        TextColor="White"
+                        WidthRequest="80"
+                        HeightRequest="80"
+                        CornerRadius="40"
+                        FontSize="32" />
+            </HorizontalStackLayout>
+        </Grid>
+
+        <!-- Judge Button and Result Area -->
+        <Grid Grid.Row="2" RowDefinitions="*, Auto, Auto" Padding="20" VerticalOptions="End">
             <Button x:Name="JudgeButton"
-                    Grid.Row="2"
-                    Text="🔍 Judge Latest Image"
+                    Grid.Row="1"
+                    Text="🔍 Judge RealtimePic.jpg"
                     Clicked="OnJudgeClicked"
                     BackgroundColor="#9C27B0"
                     TextColor="White"
                     HeightRequest="50"
-                    FontSize="16" />
+                    FontSize="16"
+                    Margin="0,0,0,10" />
 
-            <!-- Fourth Row: Result Display -->
-            <Border Grid.Row="3"
+            <Border Grid.Row="2"
                     BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray950}}"
                     StrokeThickness="1"
                     Stroke="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"

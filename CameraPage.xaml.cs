@@ -1,4 +1,4 @@
-﻿// CameraPage.xaml.cs - Windows optimized version with no redundant re-encoding
+﻿// CameraPage.xaml.cs - Simplified version with timer
 
 #if WINDOWS
 using Windows.Media.Capture;
@@ -17,18 +17,26 @@ namespace VisionFocus
     {
 #if WINDOWS
         private MediaCapture? _mediaCapture;
-        private DispatcherTimer? _timer;
+        private DispatcherTimer? _previewTimer;
+        private DispatcherTimer? _autoSaveTimer;
+        private DispatcherTimer? _countdownTimer;
         private volatile bool _isCapturing = false;
+        private volatile bool _isPaused = false;
         private readonly SemaphoreSlim _captureGate = new(1, 1);
         private byte[]? _latestJpegBytes;
 
-        // Exposure compensation value (for brightness adjustment)
-        private float _expComp = 0.5f;
+        // Timer settings
+        private int _remainingSeconds = 25 * 60; // 25 minutes in seconds
+        private const int SessionDurationMinutes = 25;
 
-        // Timer frame interval (ms): 100ms ≈ 10fps
-        private const int PreviewIntervalMs = 100;
+        // Timer intervals
+        private const int PreviewIntervalMs = 100;  // Preview update: 100ms ≈ 10fps
+        private const int AutoSaveIntervalMs = 500; // Auto-save: 500ms = 0.5 seconds
 
-        // Target resolution (will select closest if exact match not available)
+        // Fixed filename for auto-save
+        private const string RealtimePicFilename = "RealtimePic.jpg";
+
+        // Target resolution
         private const uint TargetWidth = 1280;
         private const uint TargetHeight = 720;
 #endif
@@ -41,10 +49,6 @@ namespace VisionFocus
         protected override async void OnAppearing()
         {
             base.OnAppearing();
-#if WINDOWS
-            if (_mediaCapture == null)
-                await InitializeCameraAsync();
-#endif
         }
 
 #if WINDOWS
@@ -52,9 +56,6 @@ namespace VisionFocus
         {
             try
             {
-                StatusLabel.IsVisible = true;
-                StatusLabel.Text = "Initializing camera...";
-
                 // Initialize MediaCapture
                 _mediaCapture = new MediaCapture();
                 var settings = new MediaCaptureInitializationSettings
@@ -66,29 +67,74 @@ namespace VisionFocus
 
                 await ConfigureCameraAsync(_mediaCapture);
 
-                // Start timer preview (10fps)
-                _timer = new DispatcherTimer();
-                _timer.Interval = TimeSpan.FromMilliseconds(PreviewIntervalMs);
-                _timer.Tick += async (_, __) => await CaptureFrameAsync();
-                _timer.Start();
+                // Start preview timer (10fps for display)
+                _previewTimer = new DispatcherTimer();
+                _previewTimer.Interval = TimeSpan.FromMilliseconds(PreviewIntervalMs);
+                _previewTimer.Tick += async (_, __) => await CaptureFrameAsync();
+                _previewTimer.Start();
+
+                // Start auto-save timer (0.5 seconds interval)
+                _autoSaveTimer = new DispatcherTimer();
+                _autoSaveTimer.Interval = TimeSpan.FromMilliseconds(AutoSaveIntervalMs);
+                _autoSaveTimer.Tick += async (_, __) => await AutoSaveImageAsync();
+                _autoSaveTimer.Start();
+
+                // Start countdown timer (1 second interval)
+                _remainingSeconds = SessionDurationMinutes * 60;
+                UpdateTimerDisplay();
+                _countdownTimer = new DispatcherTimer();
+                _countdownTimer.Interval = TimeSpan.FromSeconds(1);
+                _countdownTimer.Tick += OnCountdownTick;
+                _countdownTimer.Start();
 
                 _isCapturing = true;
+                _isPaused = false;
 
                 // Update UI
-                StartButton.IsEnabled = false;
-                StopButton.IsEnabled = true;
-                CaptureButton.IsEnabled = true;
-                StatusLabel.IsVisible = false;
+                StartButton.IsVisible = false;
+                ControlButtons.IsVisible = true;
 
-                Debug.WriteLine("✅ Live preview started (DispatcherTimer 10fps)");
+                Debug.WriteLine("✅ Camera started with auto-save (every 0.5s) and timer");
             }
             catch (Exception ex)
             {
                 await DisplayAlert("Error", $"Camera initialization failed: {ex.Message}", "OK");
-                StatusLabel.Text = $"Error: {ex.Message}";
-                StatusLabel.IsVisible = true;
                 Debug.WriteLine(ex);
             }
+        }
+
+        /// <summary>
+        /// Countdown timer tick event
+        /// </summary>
+        private void OnCountdownTick(object? sender, object e)
+        {
+            if (_isPaused) return;
+
+            _remainingSeconds--;
+            UpdateTimerDisplay();
+
+            if (_remainingSeconds <= 0)
+            {
+                // Session time is up
+                StopCamera();
+                MainThread.BeginInvokeOnMainThread(async () =>
+                {
+                    await DisplayAlert("Session Complete", "25 minutes session has ended", "OK");
+                });
+            }
+        }
+
+        /// <summary>
+        /// Update timer display
+        /// </summary>
+        private void UpdateTimerDisplay()
+        {
+            int minutes = _remainingSeconds / 60;
+            int seconds = _remainingSeconds % 60;
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                TimerLabel.Text = $"{minutes:D2}:{seconds:D2}";
+            });
         }
 
         /// <summary>
@@ -154,7 +200,7 @@ namespace VisionFocus
                 Debug.WriteLine($"ISO setting error: {ex.Message}");
             }
 
-            // [IMPORTANT] Set exposure compensation to 0 or +0.5 (to brighten image)
+            // Set exposure compensation to brighten image
             try
             {
                 if (vdc.ExposureCompensationControl.Supported)
@@ -163,7 +209,6 @@ namespace VisionFocus
                     var max = vdc.ExposureCompensationControl.Max;
                     var step = vdc.ExposureCompensationControl.Step;
 
-                    // Set to +0.5 to brighten (clamp within range)
                     float targetComp = 0.5f; // 0 = standard, +0.5~+1.0 = brighter
                     var clamped = Math.Max(min, Math.Min(max, targetComp));
                     await vdc.ExposureCompensationControl.SetValueAsync(clamped);
@@ -211,7 +256,7 @@ namespace VisionFocus
                 Debug.WriteLine($"Focus setting error: {ex.Message}");
             }
 
-            // Enable backlight compensation (for backlighting situations)
+            // Enable backlight compensation
             try
             {
                 if (vdc.BacklightCompensation != null && vdc.BacklightCompensation.Capabilities.Supported)
@@ -236,13 +281,12 @@ namespace VisionFocus
             }
             catch { /* ignore */ }
 
-            // Adjust brightness and contrast (if device supports)
+            // Adjust brightness and contrast
             try
             {
                 if (vdc.Brightness != null && vdc.Brightness.Capabilities.Supported)
                 {
                     var brightnessRange = vdc.Brightness.Capabilities;
-                    // Set slightly brighter than center
                     double targetBrightness = (brightnessRange.Max + brightnessRange.Min) / 2.0 + brightnessRange.Step;
                     vdc.Brightness.TrySetValue(targetBrightness);
                     Debug.WriteLine($"✅ Brightness adjusted: {targetBrightness}");
@@ -251,7 +295,6 @@ namespace VisionFocus
                 if (vdc.Contrast != null && vdc.Contrast.Capabilities.Supported)
                 {
                     var contrastRange = vdc.Contrast.Capabilities;
-                    // Set contrast slightly higher than standard
                     double targetContrast = (contrastRange.Max + contrastRange.Min) / 2.0 + contrastRange.Step;
                     vdc.Contrast.TrySetValue(targetContrast);
                     Debug.WriteLine($"✅ Contrast adjusted: {targetContrast}");
@@ -264,10 +307,7 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Capture one JPEG frame via timer and display in Image control.
-        /// Note: Ideally CaptureElement/FrameReader would be used for preview,
-        ///       but to maintain existing XAML (Image), we use JPEG direct output + FromStream.
-        ///       No decode->re-encode is performed here.
+        /// Capture one JPEG frame and update preview display
         /// </summary>
         private async Task CaptureFrameAsync()
         {
@@ -281,7 +321,7 @@ namespace VisionFocus
                 using var stream = new InMemoryRandomAccessStream();
                 await _mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreateJpeg(), stream);
 
-                // Convert directly to byte array (no decode/re-encode)
+                // Convert to byte array
                 stream.Seek(0);
                 using var netStream = stream.AsStreamForRead();
                 using var ms = new MemoryStream();
@@ -290,9 +330,9 @@ namespace VisionFocus
 
                 _latestJpegBytes = bytes;
 
+                // Update preview display
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    // Creating short-lived Stream every time is hard on GC, but maintains minimal changes
                     CameraPreview.Source = ImageSource.FromStream(() => new MemoryStream(bytes));
                 });
             }
@@ -303,6 +343,29 @@ namespace VisionFocus
             finally
             {
                 _captureGate.Release();
+            }
+        }
+
+        /// <summary>
+        /// Auto-save the latest captured image as RealtimePic.jpg
+        /// </summary>
+        private async Task AutoSaveImageAsync()
+        {
+            if (_isPaused) return;
+
+            try
+            {
+                if (_latestJpegBytes == null || _latestJpegBytes.Length == 0)
+                    return;
+
+                string filePath = ImageHelper.GetImagePath(RealtimePicFilename);
+                await File.WriteAllBytesAsync(filePath, _latestJpegBytes);
+
+                Debug.WriteLine($"Auto-saved: {filePath}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Auto-save error: {ex.Message}");
             }
         }
 #endif
@@ -321,86 +384,53 @@ namespace VisionFocus
 #endif
         }
 
+        private void OnPauseClicked(object sender, EventArgs e)
+        {
+#if WINDOWS
+            _isPaused = !_isPaused;
+
+            if (_isPaused)
+            {
+                PauseButton.Text = "▶";
+                PauseButton.BackgroundColor = Color.FromArgb("#4CAF50");
+                Debug.WriteLine("Session paused");
+            }
+            else
+            {
+                PauseButton.Text = "⏸";
+                PauseButton.BackgroundColor = Color.FromArgb("#FF9800");
+                Debug.WriteLine("Session resumed");
+            }
+#endif
+        }
+
         private void OnStopClicked(object sender, EventArgs e)
         {
             StopCamera();
-        }
-
-        private async void OnCaptureClicked(object sender, EventArgs e)
-        {
-#if WINDOWS
-            try
-            {
-                if (_latestJpegBytes == null || _latestJpegBytes.Length == 0)
-                {
-                    await DisplayAlert("Error", "No frame available to save", "OK");
-                    return;
-                }
-
-                string fileName = $"IMG_{DateTime.Now:yyyyMMdd_HHmmss}.jpg";
-                string filePath = ImageHelper.GetImagePath(fileName);
-                await File.WriteAllBytesAsync(filePath, _latestJpegBytes);
-
-                await DisplayAlert("Success", $"Image saved successfully!\n{fileName}", "OK");
-                Debug.WriteLine($"Image saved: {filePath}");
-            }
-            catch (Exception ex)
-            {
-                await DisplayAlert("Error", $"Failed to save image: {ex.Message}", "OK");
-            }
-#else
-            await DisplayAlert("Not Supported", "This feature only works on Windows.", "OK");
-#endif
-        }
-
-        private async void OnOpenFolderClicked(object sender, EventArgs e)
-        {
-#if WINDOWS
-            try
-            {
-                string folderPath = ImageHelper.ImagesFolderPath;
-                if (Directory.Exists(folderPath))
-                {
-                    // Open folder in Explorer
-                    Process.Start("explorer.exe", folderPath);
-                }
-                else
-                {
-                    await DisplayAlert("Error", "Folder does not exist", "OK");
-                }
-            }
-            catch (Exception ex)
-            {
-                await DisplayAlert("Error", $"Failed to open folder: {ex.Message}", "OK");
-            }
-#else
-            await DisplayAlert("Not Supported", "This feature only works on Windows.", "OK");
-#endif
         }
 
         private async void OnJudgeClicked(object sender, EventArgs e)
         {
             try
             {
-                var imagePaths = ImageHelper.GetAllImagePaths();
-                if (imagePaths.Count == 0)
+                // Judge the RealtimePic.jpg file
+                string realtimePicPath = ImageHelper.GetImagePath(RealtimePicFilename);
+
+                if (!File.Exists(realtimePicPath))
                 {
-                    await DisplayAlert("Error", "No images found. Please capture an image first.", "OK");
+                    await DisplayAlert("Error", $"'{RealtimePicFilename}' not found. Please start the camera first.", "OK");
                     return;
                 }
-
-                string latestImagePath = imagePaths[0];
-                string fileName = Path.GetFileName(latestImagePath);
 
                 JudgeButton.IsEnabled = false;
                 JudgeButton.Text = "⏳ Processing...";
                 ResultContainer.IsVisible = true;
                 ResultLabel.Text = "Sending image to Roboflow API...\nPlease wait...";
 
-                string jsonResponse = await RoboflowService.InferImageAsync(latestImagePath);
+                string jsonResponse = await RoboflowService.InferImageAsync(realtimePicPath);
                 string parsedResult = RoboflowService.ParseResponse(jsonResponse);
 
-                ResultLabel.Text = $"Image: {fileName}\n\n{parsedResult}";
+                ResultLabel.Text = $"Image: {RealtimePicFilename}\n\n{parsedResult}";
                 Debug.WriteLine($"API Response: {jsonResponse}");
             }
             catch (Exception ex)
@@ -421,10 +451,17 @@ namespace VisionFocus
             try
             {
                 _isCapturing = false;
+                _isPaused = false;
 
-                // Stop timer
-                _timer?.Stop();
-                _timer = null;
+                // Stop all timers
+                _previewTimer?.Stop();
+                _previewTimer = null;
+
+                _autoSaveTimer?.Stop();
+                _autoSaveTimer = null;
+
+                _countdownTimer?.Stop();
+                _countdownTimer = null;
 
                 // Wait for last frame to complete (max 500ms)
                 SpinWait.SpinUntil(() =>
@@ -438,15 +475,19 @@ namespace VisionFocus
 
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    StartButton.IsEnabled = true;
-                    StopButton.IsEnabled = false;
-                    CaptureButton.IsEnabled = false;
-                    StatusLabel.Text = "Stopped";
-                    StatusLabel.IsVisible = true;
+                    StartButton.IsVisible = true;
+                    ControlButtons.IsVisible = false;
 
-                    // Uncomment to clear screen to black
-                    // CameraPreview.Source = null;
+                    // Reset timer display
+                    _remainingSeconds = SessionDurationMinutes * 60;
+                    UpdateTimerDisplay();
+
+                    // Reset pause button
+                    PauseButton.Text = "⏸";
+                    PauseButton.BackgroundColor = Color.FromArgb("#FF9800");
                 });
+
+                Debug.WriteLine("Camera stopped");
             }
             catch (Exception ex)
             {
