@@ -13,6 +13,7 @@
                    Style="{StaticResource SubHeadline}"
                    SemanticProperties.HeadingLevel="Level2" />
         </VerticalStackLayout>
+
         <!-- Camera Preview -->
         <Border Grid.Row="1"
                 BackgroundColor="Black"
@@ -27,6 +28,7 @@
                        Aspect="AspectFit"
                        HorizontalOptions="Fill"
                        VerticalOptions="Fill" />
+
                 <!-- Status Display -->
                 <Label x:Name="StatusLabel"
                        Text="Please start the camera"
@@ -38,33 +40,61 @@
                        FontSize="18" />
             </Grid>
         </Border>
+
         <!-- Control Buttons -->
-        <Grid Grid.Row="2" ColumnDefinitions="*, *, *" ColumnSpacing="10">
-            <Button x:Name="BackButton"
-                    Grid.Column="0"
-                    Text="← Back"
-                    Clicked="OnBackClicked"
-                    BackgroundColor="#757575"
-                    TextColor="White"
-                    HeightRequest="50"
-                    FontSize="16" />
-            <Button x:Name="StartButton"
-                    Grid.Column="1"
-                    Text="📷 Start"
-                    Clicked="OnStartClicked"
-                    BackgroundColor="#512BD4"
-                    TextColor="White"
-                    HeightRequest="50"
-                    FontSize="16" />
-            <Button x:Name="StopButton"
-                    Grid.Column="2"
-                    Text="⏹ Stop"
-                    Clicked="OnStopClicked"
-                    BackgroundColor="#F44336"
-                    TextColor="White"
-                    HeightRequest="50"
-                    FontSize="16"
-                    IsEnabled="False" />
+        <Grid Grid.Row="2" RowDefinitions="Auto, Auto" RowSpacing="10">
+            <!-- First Row: Back, Start, Stop -->
+            <Grid Grid.Row="0" ColumnDefinitions="*, *, *" ColumnSpacing="10">
+                <Button x:Name="BackButton"
+                        Grid.Column="0"
+                        Text="← Back"
+                        Clicked="OnBackClicked"
+                        BackgroundColor="#757575"
+                        TextColor="White"
+                        HeightRequest="50"
+                        FontSize="16" />
+
+                <Button x:Name="StartButton"
+                        Grid.Column="1"
+                        Text="📷 Start"
+                        Clicked="OnStartClicked"
+                        BackgroundColor="#512BD4"
+                        TextColor="White"
+                        HeightRequest="50"
+                        FontSize="16" />
+
+                <Button x:Name="StopButton"
+                        Grid.Column="2"
+                        Text="⏹ Stop"
+                        Clicked="OnStopClicked"
+                        BackgroundColor="#F44336"
+                        TextColor="White"
+                        HeightRequest="50"
+                        FontSize="16"
+                        IsEnabled="False" />
+            </Grid>
+
+            <!-- Second Row: Capture and Open Folder -->
+            <Grid Grid.Row="1" ColumnDefinitions="*, *" ColumnSpacing="10">
+                <Button x:Name="CaptureButton"
+                        Grid.Column="0"
+                        Text="💾 Capture &amp; Save"
+                        Clicked="OnCaptureClicked"
+                        BackgroundColor="#4CAF50"
+                        TextColor="White"
+                        HeightRequest="50"
+                        FontSize="16"
+                        IsEnabled="False" />
+
+                <Button x:Name="OpenFolderButton"
+                        Grid.Column="1"
+                        Text="📁 Open Folder"
+                        Clicked="OnOpenFolderClicked"
+                        BackgroundColor="#FF9800"
+                        TextColor="White"
+                        HeightRequest="50"
+                        FontSize="16" />
+            </Grid>
         </Grid>
     </Grid>
 </ContentPage>

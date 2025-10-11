@@ -37,6 +37,17 @@
 	  <MauiXaml Update="CameraPage.xaml">
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
+	  <MauiXaml Update="ImagePreviewPage.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
+	</ItemGroup>
+
+	<!-- Ensure CapturedImages folder exists and is copied -->
+	<ItemGroup>
+		<None Include="Resources\Raw\CapturedImages\**\*" CopyToOutputDirectory="PreserveNewest" />
+	</ItemGroup>
+	<ItemGroup>
+	  <Folder Include="Resources\Raw\CapturedImages\" />
 	</ItemGroup>
 
 </Project>
