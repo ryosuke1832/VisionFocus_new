@@ -1,238 +1,361 @@
-using System.Diagnostics;
+Ôªøusing System.Diagnostics;
 
 namespace VisionFocus
 {
     public partial class MonitoringPage : ContentPage
     {
-        private Task? _monitoringTask;
-        private CancellationTokenSource? _cancellationTokenSource;
         private bool _isMonitoring = false;
-        private int _checkCount = 0;
+        private CancellationTokenSource? _cancellationTokenSource;
+
+        // Track eyes closed state
+        private DateTime? _eyesClosedStartTime = null;
+        private double _consecutiveClosedDuration = 0; // Duration in seconds
+        private const double ALERT_THRESHOLD = 5.0; // Alert after 5 seconds
+        private const double WARNING_THRESHOLD = 3.0; // Warning after 3 seconds
+
+        // Monitoring interval in milliseconds
+        private const int MONITORING_INTERVAL_MS = 1000; // Check every 1 second
 
         public MonitoringPage()
         {
             InitializeComponent();
         }
 
-        /// <summary>
-        /// Start monitoring
-        /// </summary>
-        private void OnStartClicked(object sender, EventArgs e)
+        private async void OnBackClicked(object sender, EventArgs e)
         {
+            // Stop monitoring before going back
             if (_isMonitoring)
-                return;
-
-            _isMonitoring = true;
-            _checkCount = 0;
-
-            // Update UI
-            StartButton.IsEnabled = false;
-            StopButton.IsEnabled = true;
-            StatusLabel.Text = "Monitoring... (Continuous checking)";
-
-            // Clear log
-            LogContainer.Children.Clear();
-            AddLogEntry("Monitoring started", "#4CAF50");
-
-            // Start monitoring loop
-            _cancellationTokenSource = new CancellationTokenSource();
-            _monitoringTask = Task.Run(() => MonitoringLoopAsync(_cancellationTokenSource.Token));
+            {
+                StopMonitoring();
+            }
+            await Shell.Current.GoToAsync("..");
         }
 
-        /// <summary>
-        /// Stop monitoring
-        /// </summary>
+        private async void OnStartClicked(object sender, EventArgs e)
+        {
+            try
+            {
+                // Check if there are saved images
+                var imagePaths = ImageHelper.GetAllImagePaths();
+                if (imagePaths.Count == 0)
+                {
+                    await DisplayAlert("Error", "No images found. Please capture an image with the camera first.", "OK");
+                    return;
+                }
+
+                // Start monitoring
+                _isMonitoring = true;
+                _cancellationTokenSource = new CancellationTokenSource();
+
+                // Initialize tracking variables
+                _eyesClosedStartTime = null;
+                _consecutiveClosedDuration = 0;
+
+                // Update UI
+                StartButton.IsEnabled = false;
+                StopButton.IsEnabled = true;
+                StatusLabel.Text = "Monitoring...";
+                LogContainer.Children.Clear();
+
+                AddLogEntry("üü¢ Monitoring started", LogLevel.Success);
+
+                // Start monitoring loop
+                _ = Task.Run(() => MonitoringLoopAsync(_cancellationTokenSource.Token));
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Error", $"Failed to start monitoring: {ex.Message}", "OK");
+                AddLogEntry($"‚ùå Error: {ex.Message}", LogLevel.Error);
+            }
+        }
+
         private void OnStopClicked(object sender, EventArgs e)
         {
             StopMonitoring();
         }
 
-        /// <summary>
-        /// Stop monitoring process
-        /// </summary>
         private void StopMonitoring()
         {
-            if (!_isMonitoring)
-                return;
-
-            _isMonitoring = false;
-
-            // Cancel monitoring task
-            _cancellationTokenSource?.Cancel();
-
-            // Update UI
-            MainThread.BeginInvokeOnMainThread(() =>
+            if (_isMonitoring)
             {
-                StartButton.IsEnabled = true;
-                StopButton.IsEnabled = false;
-                StatusLabel.Text = $"Monitoring stopped (Total {_checkCount} checks)";
-                AddLogEntry($"Monitoring stopped (Total checks: {_checkCount})", "#F44336");
-            });
+                _isMonitoring = false;
+                _cancellationTokenSource?.Cancel();
+
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    StartButton.IsEnabled = true;
+                    StopButton.IsEnabled = false;
+                    StatusLabel.Text = "Stop monitoring";
+                    AddLogEntry("‚èπÔ∏è Stop monitoring", LogLevel.Info);
+                });
+            }
         }
 
         /// <summary>
-        /// Monitoring loop - continuously checks after each API response
+        /// Monitoring loop: continuously calls API and monitors eye state
         /// </summary>
         private async Task MonitoringLoopAsync(CancellationToken cancellationToken)
         {
-            while (!cancellationToken.IsCancellationRequested && _isMonitoring)
+            while (_isMonitoring && !cancellationToken.IsCancellationRequested)
             {
                 try
                 {
-                    await PerformCheckAsync();
+                    // Get latest image
+                    var imagePaths = ImageHelper.GetAllImagePaths();
+                    if (imagePaths.Count == 0)
+                    {
+                        await MainThread.InvokeOnMainThreadAsync(() =>
+                        {
+                            AddLogEntry("‚ö†Ô∏è No images found", LogLevel.Warning);
+                        });
+                        await Task.Delay(MONITORING_INTERVAL_MS, cancellationToken);
+                        continue;
+                    }
+
+                    string latestImagePath = imagePaths[0];
+                    string fileName = Path.GetFileName(latestImagePath);
+
+                    // Record API call start time
+                    var startTime = DateTime.Now;
+
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                    {
+                        AddLogEntry($"üì§ Sending to API... ({fileName})", LogLevel.Info);
+                    });
+
+                    // Call Roboflow API
+                    string jsonResponse = await RoboflowService.InferImageAsync(latestImagePath);
+
+                    // Record API call end time
+                    var endTime = DateTime.Now;
+                    var responseTime = (endTime - startTime).TotalMilliseconds;
+
+                    // Parse response
+                    string parsedResult = RoboflowService.ParseResponse(jsonResponse);
+
+                    // Determine eye state
+                    EyeState eyeState = DetermineEyeState(parsedResult);
+
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                    {
+                        AddLogEntry($"üì• API response received ({responseTime:F0}ms)", LogLevel.Info);
+                        ProcessEyeState(eyeState, parsedResult);
+                    });
+
+                    Debug.WriteLine($"API Response: {jsonResponse}");
+                }
+                catch (OperationCanceledException)
+                {
+                    // Cancelled - normal exit
+                    break;
                 }
                 catch (Exception ex)
                 {
                     await MainThread.InvokeOnMainThreadAsync(() =>
                     {
-                        string timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
-                        AddLogEntry($"[{timestamp}] Error: {ex.Message}", "#F44336");
-                        Debug.WriteLine($"[Monitoring] Error: {ex.Message}");
+                        AddLogEntry($"‚ùå Error: {ex.Message}", LogLevel.Error);
                     });
+                    Debug.WriteLine($"Monitoring error: {ex}");
                 }
 
-                // Small delay to prevent overwhelming the system
-                if (!cancellationToken.IsCancellationRequested)
+                // Wait before next check
+                try
                 {
-                    await Task.Delay(100, cancellationToken);
+                    await Task.Delay(MONITORING_INTERVAL_MS, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
                 }
             }
         }
 
         /// <summary>
-        /// Perform single check with timing information
+        /// Determine eye state from API response
         /// </summary>
-        private async Task PerformCheckAsync()
+        private EyeState DetermineEyeState(string parsedResult)
         {
-            if (!_isMonitoring)
-                return;
+            if (string.IsNullOrWhiteSpace(parsedResult))
+                return EyeState.Unknown;
 
-            try
+            // Check for "No detection found"
+            if (parsedResult.Contains("No detection found") ||
+                parsedResult.Contains("no detection"))
             {
-                _checkCount++;
+                return EyeState.Unknown;
+            }
 
-                // Get latest image
-                var imagePaths = ImageHelper.GetAllImagePaths();
-                if (imagePaths.Count == 0)
-                {
-                    string errorTime = DateTime.Now.ToString("HH:mm:ss.fff");
-                    await MainThread.InvokeOnMainThreadAsync(() =>
+            // Check if eyes are closed
+            if (parsedResult.Contains("eyes_closed", StringComparison.OrdinalIgnoreCase) ||
+                parsedResult.Contains("closed", StringComparison.OrdinalIgnoreCase))
+            {
+                return EyeState.Closed;
+            }
+
+            // Check if eyes are open
+            if (parsedResult.Contains("eyes_open", StringComparison.OrdinalIgnoreCase) ||
+                parsedResult.Contains("open", StringComparison.OrdinalIgnoreCase))
+            {
+                return EyeState.Open;
+            }
+
+            return EyeState.Unknown;
+        }
+
+        /// <summary>
+        /// Process eye state and trigger alerts if needed
+        /// </summary>
+        private void ProcessEyeState(EyeState eyeState, string detectionDetails)
+        {
+            var now = DateTime.Now;
+
+            switch (eyeState)
+            {
+                case EyeState.Closed:
+                    // Eyes are closed
+                    if (_eyesClosedStartTime == null)
                     {
-                        AddLogEntry($"[{errorTime}] Error: No images found", "#FF9800");
-                    });
-                    return;
-                }
+                        // First detection of closed eyes
+                        _eyesClosedStartTime = now;
+                        _consecutiveClosedDuration = 0;
+                        AddLogEntry("üëÅÔ∏è Eyes closed detected", LogLevel.Warning);
+                    }
+                    else
+                    {
+                        // Eyes continuously closed
+                        _consecutiveClosedDuration = (now - _eyesClosedStartTime.Value).TotalSeconds;
 
-                string latestImagePath = imagePaths[0];
-                string fileName = Path.GetFileName(latestImagePath);
+                        if (_consecutiveClosedDuration >= ALERT_THRESHOLD)
+                        {
+                            // Closed for 5+ seconds - ALERT
+                            AddLogEntry($"üö® [ALERT] Eyes closed for {_consecutiveClosedDuration:F1} seconds!", LogLevel.Alert);
+                            StatusLabel.Text = $"üö® ALERT! Eyes closed for {_consecutiveClosedDuration:F1}s";
+                        }
+                        else if (_consecutiveClosedDuration >= WARNING_THRESHOLD)
+                        {
+                            // Closed for 3+ seconds - WARNING
+                            AddLogEntry($"‚ö†Ô∏è [WARNING] Eyes closed for {_consecutiveClosedDuration:F1} seconds", LogLevel.Warning);
+                            StatusLabel.Text = $"‚ö†Ô∏è Eyes closed for {_consecutiveClosedDuration:F1}s";
+                        }
+                        else
+                        {
+                            // Normal tracking
+                            StatusLabel.Text = $"Eyes closed for {_consecutiveClosedDuration:F1}s";
+                        }
+                    }
+                    break;
 
-                // Record send time
-                DateTime sendTime = DateTime.Now;
-                string sendTimeStr = sendTime.ToString("HH:mm:ss.fff");
+                case EyeState.Open:
+                    // Eyes are open
+                    if (_eyesClosedStartTime != null)
+                    {
+                        // Eyes opened, reset closed duration
+                        var closedDuration = (now - _eyesClosedStartTime.Value).TotalSeconds;
 
-                // Log check start with send time
-                await MainThread.InvokeOnMainThreadAsync(() =>
-                {
-                    AddLogEntry($"Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™Ñ™", "#E0E0E0");
-                    AddLogEntry($"Check #{_checkCount}: {fileName}", "#2196F3");
-                    AddLogEntry($"?? API Sent: {sendTimeStr}", "#9C27B0");
-                });
+                        if (closedDuration >= ALERT_THRESHOLD)
+                        {
+                            AddLogEntry($"‚úÖ Eyes opened (were closed for {closedDuration:F1}s)", LogLevel.Success);
+                        }
+                        else if (closedDuration >= WARNING_THRESHOLD)
+                        {
+                            AddLogEntry($"üëÅÔ∏è Eyes opened (were closed for {closedDuration:F1}s)", LogLevel.Info);
+                        }
+                        else
+                        {
+                            AddLogEntry("üëÅÔ∏è Eyes opened", LogLevel.Success);
+                        }
 
-                // Send to API
-                string jsonResponse = await RoboflowService.InferImageAsync(latestImagePath);
+                        _eyesClosedStartTime = null;
+                        _consecutiveClosedDuration = 0;
+                    }
+                    StatusLabel.Text = "‚úÖ Eyes are open";
+                    break;
 
-                // Record receive time
-                DateTime receiveTime = DateTime.Now;
-                string receiveTimeStr = receiveTime.ToString("HH:mm:ss.fff");
-                TimeSpan responseTime = receiveTime - sendTime;
-
-                string parsedResult = RoboflowService.ParseResponse(jsonResponse);
-
-                // Display result with timing information
-                await MainThread.InvokeOnMainThreadAsync(() =>
-                {
-                    AddLogEntry($"?? API Received: {receiveTimeStr}", "#9C27B0");
-                    AddLogEntry($"??  Response Time: {responseTime.TotalMilliseconds:F0}ms", "#FF9800");
-                    AddLogEntry($"Result:", "#4CAF50");
-                    AddLogEntry(parsedResult, "#333333", isIndented: true);
-
-                    // Scroll log to bottom
-                    ScrollToBottom();
-                });
-
-                Debug.WriteLine($"[Monitoring] Check #{_checkCount} | Send: {sendTimeStr} | Receive: {receiveTimeStr} | Response: {responseTime.TotalMilliseconds}ms");
-            }
-            catch (Exception ex)
-            {
-                DateTime errorTime = DateTime.Now;
-                string errorTimeStr = errorTime.ToString("HH:mm:ss.fff");
-                await MainThread.InvokeOnMainThreadAsync(() =>
-                {
-                    AddLogEntry($"[{errorTimeStr}] Error: {ex.Message}", "#F44336");
-                    Debug.WriteLine($"[Monitoring] Error: {ex.Message}");
-                });
+                case EyeState.Unknown:
+                    // Could not detect
+                    AddLogEntry("‚ùì Could not detect eye state", LogLevel.Warning);
+                    StatusLabel.Text = "‚ùì Detection failed";
+                    // Reset counter when detection fails
+                    _eyesClosedStartTime = null;
+                    _consecutiveClosedDuration = 0;
+                    break;
             }
         }
 
         /// <summary>
-        /// Add log entry
+        /// Add a log entry to the display
         /// </summary>
-        private void AddLogEntry(string message, string color, bool isIndented = false)
+        private void AddLogEntry(string message, LogLevel level)
         {
-            var frame = new Frame
-            {
-                BackgroundColor = Colors.Transparent,
-                BorderColor = Color.FromArgb(color),
-                CornerRadius = 5,
-                Padding = new Thickness(isIndented ? 20 : 10, 5),
-                Margin = new Thickness(0, 2),
-                HasShadow = false
-            };
+            var timestamp = DateTime.Now.ToString("HH:mm:ss");
+            var logText = $"[{timestamp}] {message}";
 
             var label = new Label
             {
-                Text = message,
-                TextColor = Color.FromArgb(color),
-                FontSize = 13,
-                LineBreakMode = LineBreakMode.WordWrap
+                Text = logText,
+                FontSize = 14,
+                Padding = new Thickness(5),
+                TextColor = GetLogColor(level)
             };
 
-            frame.Content = label;
-            LogContainer.Children.Add(frame);
+            LogContainer.Children.Add(label);
 
-            // Remove old logs (keep only latest 50 entries)
-            while (LogContainer.Children.Count > 50)
+            // auto-scroll to bottom    
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                await Task.Delay(100);
+                await LogScrollView.ScrollToAsync(label, ScrollToPosition.End, true);
+            });
+
+            // if log exceeds 100 entries, remove oldest
+            if (LogContainer.Children.Count > 100)
             {
                 LogContainer.Children.RemoveAt(0);
             }
         }
 
         /// <summary>
-        /// Scroll log to bottom
+        /// get color based on log level
         /// </summary>
-        private async void ScrollToBottom()
+        private Color GetLogColor(LogLevel level)
         {
-            // Add slight delay before scrolling (wait for layout update)
-            await Task.Delay(100);
-            await LogScrollView.ScrollToAsync(0, LogContainer.Height, animated: true);
+            return level switch
+            {
+                LogLevel.Success => Colors.Green,
+                LogLevel.Info => Application.Current?.RequestedTheme == AppTheme.Dark ? Colors.White : Colors.Black,
+                LogLevel.Warning => Colors.Orange,
+                LogLevel.Error => Colors.Red,
+                LogLevel.Alert => Colors.Red,
+                _ => Application.Current?.RequestedTheme == AppTheme.Dark ? Colors.White : Colors.Black
+            };
         }
 
-        /// <summary>
-        /// Back button click handler
-        /// </summary>
-        private async void OnBackClicked(object sender, EventArgs e)
-        {
-            StopMonitoring();
-            await Shell.Current.GoToAsync("..");
-        }
-
-        /// <summary>
-        /// Stop monitoring when page disappears
-        /// </summary>
         protected override void OnDisappearing()
         {
             base.OnDisappearing();
             StopMonitoring();
+        }
+
+        /// <summary>
+        /// eye state enumeration
+        /// </summary>
+        private enum EyeState
+        {
+            Open,      
+            Closed,    
+            Unknown    
+        }
+
+        /// <summary>
+        /// Log level for color coding
+        /// </summary>
+        private enum LogLevel
+        {
+            Success,   
+            Info,     
+            Warning,  
+            Error,     
+            Alert    
         }
     }
 }
