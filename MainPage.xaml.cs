@@ -8,7 +8,7 @@
         }
 
         /// <summary>
-        /// カメラページへ遷移
+        /// Navigate to Camera Page
         /// </summary>
         private async void OnCameraClicked(object sender, EventArgs e)
         {
@@ -16,19 +16,19 @@
         }
 
         /// <summary>
-        /// ギャラリーページへ遷移（将来実装予定）
+        /// Navigate to Gallery Page (planned for future implementation)
         /// </summary>
         private async void OnGalleryClicked(object sender, EventArgs e)
         {
-            await DisplayAlert("お知らせ", "ギャラリー機能は現在開発中です", "OK");
+            await DisplayAlert("Notice", "Gallery feature is currently under development", "OK");
         }
 
         /// <summary>
-        /// 設定ページへ遷移（将来実装予定）
+        /// Navigate to Settings Page (planned for future implementation)
         /// </summary>
         private async void OnSettingsClicked(object sender, EventArgs e)
         {
-            await DisplayAlert("お知らせ", "設定機能は現在開発中です", "OK");
+            await DisplayAlert("Notice", "Settings feature is currently under development", "OK");
         }
     }
 }

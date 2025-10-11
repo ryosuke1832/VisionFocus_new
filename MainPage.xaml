@@ -2,10 +2,8 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="VisionFocus.MainPage">
-
     <Grid RowDefinitions="Auto, *" Padding="20">
-
-        <!-- タイトル -->
+        <!-- Title -->
         <VerticalStackLayout Grid.Row="0" 
                              Spacing="10" 
                              Margin="0,0,0,40"
@@ -13,49 +11,42 @@
             <Label Text="VisionFocus"
                    Style="{StaticResource Headline}"
                    SemanticProperties.HeadingLevel="Level1" />
-            <Label Text="リアルタイムカメラアプリケーション"
+            <Label Text="Real-time Camera Application"
                    Style="{StaticResource SubHeadline}"
                    SemanticProperties.HeadingLevel="Level2" />
         </VerticalStackLayout>
-
-        <!-- メニューボタン -->
+        <!-- Menu Buttons -->
         <VerticalStackLayout Grid.Row="1" 
                              Spacing="20" 
                              VerticalOptions="Center"
                              HorizontalOptions="Center"
                              WidthRequest="300">
-
-            <Button Text="📷 カメラを起動"
+            <Button Text="📷 Start Camera"
                     Clicked="OnCameraClicked"
                     BackgroundColor="#512BD4"
                     TextColor="White"
                     HeightRequest="60"
                     FontSize="18"
                     CornerRadius="15" />
-
-            <Button Text="📁 ギャラリー"
+            <Button Text="📁 Gallery"
                     Clicked="OnGalleryClicked"
                     BackgroundColor="#4CAF50"
                     TextColor="White"
                     HeightRequest="60"
                     FontSize="18"
                     CornerRadius="15" />
-
-            <Button Text="⚙️ 設定"
+            <Button Text="⚙️ Settings"
                     Clicked="OnSettingsClicked"
                     BackgroundColor="#2196F3"
                     TextColor="White"
                     HeightRequest="60"
                     FontSize="18"
                     CornerRadius="15" />
-
-            <Label Text="バージョン 1.0"
+            <Label Text="Version 1.0"
                    HorizontalOptions="Center"
                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"
                    FontSize="12"
                    Margin="0,20,0,0" />
         </VerticalStackLayout>
-
     </Grid>
-
 </ContentPage>

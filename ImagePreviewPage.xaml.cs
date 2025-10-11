@@ -9,7 +9,7 @@ namespace VisionFocus
             InitializeComponent();
             this.imagePath = imagePath;
 
-            // 画像を表示
+            // Display image
             if (File.Exists(imagePath))
             {
                 PreviewImage.Source = ImageSource.FromFile(imagePath);
@@ -17,7 +17,7 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// 共有ボタンクリック
+        /// Share button click handler
         /// </summary>
         private async void OnShareClicked(object sender, EventArgs e)
         {
@@ -25,35 +25,35 @@ namespace VisionFocus
             {
                 if (!File.Exists(imagePath))
                 {
-                    await DisplayAlert("エラー", "画像ファイルが見つかりません", "OK");
+                    await DisplayAlert("Error", "Image file not found", "OK");
                     return;
                 }
 
-                // 共有機能を使用
+                // Use share functionality
                 await Share.Default.RequestAsync(new ShareFileRequest
                 {
-                    Title = "画像を共有",
+                    Title = "Share Image",
                     File = new ShareFile(imagePath)
                 });
             }
             catch (Exception ex)
             {
-                await DisplayAlert("エラー", $"共有に失敗しました: {ex.Message}", "OK");
+                await DisplayAlert("Error", $"Failed to share: {ex.Message}", "OK");
             }
         }
 
         /// <summary>
-        /// 削除ボタンクリック
+        /// Delete button click handler
         /// </summary>
         private async void OnDeleteClicked(object sender, EventArgs e)
         {
             try
             {
                 bool answer = await DisplayAlert(
-                    "確認",
-                    "この画像を削除しますか？",
-                    "削除",
-                    "キャンセル"
+                    "Confirm",
+                    "Do you want to delete this image?",
+                    "Delete",
+                    "Cancel"
                 );
 
                 if (answer)
@@ -61,19 +61,19 @@ namespace VisionFocus
                     if (File.Exists(imagePath))
                     {
                         File.Delete(imagePath);
-                        await DisplayAlert("完了", "画像を削除しました", "OK");
+                        await DisplayAlert("Complete", "Image deleted", "OK");
                         await Navigation.PopAsync();
                     }
                 }
             }
             catch (Exception ex)
             {
-                await DisplayAlert("エラー", $"削除に失敗しました: {ex.Message}", "OK");
+                await DisplayAlert("Error", $"Failed to delete: {ex.Message}", "OK");
             }
         }
 
         /// <summary>
-        /// 閉じるボタンクリック
+        /// Close button click handler
         /// </summary>
         private async void OnCloseClicked(object sender, EventArgs e)
         {

@@ -2,21 +2,18 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="VisionFocus.CameraPage"
-             Title="カメラ">
-
+             Title="Camera">
     <Grid RowDefinitions="Auto, *, Auto" Padding="20">
-
-        <!-- タイトル -->
+        <!-- Title -->
         <VerticalStackLayout Grid.Row="0" Spacing="10" Margin="0,0,0,20">
-            <Label Text="リアルタイムカメラ"
+            <Label Text="Real-time Camera"
                    Style="{StaticResource Headline}"
                    SemanticProperties.HeadingLevel="Level1" />
-            <Label Text="カメラプレビュー"
+            <Label Text="Camera Preview"
                    Style="{StaticResource SubHeadline}"
                    SemanticProperties.HeadingLevel="Level2" />
         </VerticalStackLayout>
-
-        <!-- カメラプレビュー -->
+        <!-- Camera Preview -->
         <Border Grid.Row="1"
                 BackgroundColor="Black"
                 StrokeThickness="0"
@@ -24,17 +21,15 @@
             <Border.StrokeShape>
                 <RoundRectangle CornerRadius="10" />
             </Border.StrokeShape>
-
             <Grid>
-                <!-- カメラ画像 -->
+                <!-- Camera Image -->
                 <Image x:Name="CameraPreview"
                        Aspect="AspectFit"
                        HorizontalOptions="Fill"
                        VerticalOptions="Fill" />
-
-                <!-- ステータス表示 -->
+                <!-- Status Display -->
                 <Label x:Name="StatusLabel"
-                       Text="カメラを起動してください"
+                       Text="Please start the camera"
                        TextColor="White"
                        BackgroundColor="#80000000"
                        Padding="10"
@@ -43,30 +38,27 @@
                        FontSize="18" />
             </Grid>
         </Border>
-
-        <!-- コントロールボタン -->
+        <!-- Control Buttons -->
         <Grid Grid.Row="2" ColumnDefinitions="*, *, *" ColumnSpacing="10">
             <Button x:Name="BackButton"
                     Grid.Column="0"
-                    Text="← 戻る"
+                    Text="← Back"
                     Clicked="OnBackClicked"
                     BackgroundColor="#757575"
                     TextColor="White"
                     HeightRequest="50"
                     FontSize="16" />
-
             <Button x:Name="StartButton"
                     Grid.Column="1"
-                    Text="📷 開始"
+                    Text="📷 Start"
                     Clicked="OnStartClicked"
                     BackgroundColor="#512BD4"
                     TextColor="White"
                     HeightRequest="50"
                     FontSize="16" />
-
             <Button x:Name="StopButton"
                     Grid.Column="2"
-                    Text="⏹ 停止"
+                    Text="⏹ Stop"
                     Clicked="OnStopClicked"
                     BackgroundColor="#F44336"
                     TextColor="White"
@@ -74,7 +66,5 @@
                     FontSize="16"
                     IsEnabled="False" />
         </Grid>
-
     </Grid>
-
 </ContentPage>

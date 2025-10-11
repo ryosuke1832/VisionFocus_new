@@ -2,12 +2,12 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="VisionFocus.ImagePreviewPage"
-             Title="画像プレビュー"
+             Title="Image Preview"
              BackgroundColor="Black">
 
     <Grid RowDefinitions="*, Auto">
 
-        <!-- 画像表示エリア -->
+        <!-- Image Display Area -->
         <ScrollView Grid.Row="0">
             <Image x:Name="PreviewImage"
                    Aspect="AspectFit"
@@ -15,33 +15,33 @@
                    VerticalOptions="Fill" />
         </ScrollView>
 
-        <!-- ボタンエリア -->
+        <!-- Button Area -->
         <Grid Grid.Row="1"
               BackgroundColor="#CC000000"
               Padding="20"
               ColumnDefinitions="*, *, *"
               RowDefinitions="Auto">
 
-            <!-- 共有ボタン -->
+            <!-- Share Button -->
             <Button Grid.Column="0"
-                    Text="📤 共有"
+                    Text="📤 Share"
                     Clicked="OnShareClicked"
                     BackgroundColor="#4CAF50"
                     TextColor="White"
                     CornerRadius="10" />
 
-            <!-- 削除ボタン -->
+            <!-- Delete Button -->
             <Button Grid.Column="1"
-                    Text="🗑️ 削除"
+                    Text="🗑️ Delete"
                     Clicked="OnDeleteClicked"
                     BackgroundColor="#F44336"
                     TextColor="White"
                     CornerRadius="10"
                     Margin="10,0" />
 
-            <!-- 閉じるボタン -->
+            <!-- Close Button -->
             <Button Grid.Column="2"
-                    Text="✕ 閉じる"
+                    Text="✕ Close"
                     Clicked="OnCloseClicked"
                     BackgroundColor="#757575"
                     TextColor="White"

@@ -21,26 +21,26 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// 戻るボタン
+        /// Back button handler
         /// </summary>
         private async void OnBackClicked(object sender, EventArgs e)
         {
-            // カメラを停止してから戻る
+            // Stop camera before going back
             StopCamera();
             await Shell.Current.GoToAsync("..");
         }
 
         /// <summary>
-        /// カメラ開始ボタン
+        /// Start camera button handler
         /// </summary>
         private async void OnStartClicked(object sender, EventArgs e)
         {
 #if WINDOWS
             try
             {
-                StatusLabel.Text = "カメラを初期化中...";
+                StatusLabel.Text = "Initializing camera...";
 
-                // カメラ権限チェック
+                // Check camera permission
                 var status = await Permissions.CheckStatusAsync<Permissions.Camera>();
                 if (status != PermissionStatus.Granted)
                 {
@@ -49,12 +49,12 @@ namespace VisionFocus
 
                 if (status != PermissionStatus.Granted)
                 {
-                    await DisplayAlert("エラー", "カメラの権限が必要です", "OK");
-                    StatusLabel.Text = "権限エラー";
+                    await DisplayAlert("Error", "Camera permission is required", "OK");
+                    StatusLabel.Text = "Permission error";
                     return;
                 }
 
-                // MediaCaptureを初期化
+                // Initialize MediaCapture
                 _mediaCapture = new MediaCapture();
                 var settings = new MediaCaptureInitializationSettings
                 {
@@ -62,7 +62,7 @@ namespace VisionFocus
                 };
                 await _mediaCapture.InitializeAsync(settings);
 
-                // タイマーで1秒ごとに撮影
+                // Capture every second with timer
                 _timer = new System.Timers.Timer(1000);
                 _timer.Elapsed += async (s, args) => await CaptureFrameAsync();
                 _timer.Start();
@@ -74,16 +74,16 @@ namespace VisionFocus
             }
             catch (Exception ex)
             {
-                await DisplayAlert("エラー", $"カメラの起動に失敗しました: {ex.Message}", "OK");
-                StatusLabel.Text = $"エラー: {ex.Message}";
+                await DisplayAlert("Error", $"Failed to start camera: {ex.Message}", "OK");
+                StatusLabel.Text = $"Error: {ex.Message}";
             }
 #else
-            await DisplayAlert("エラー", "この機能はWindowsでのみ利用可能です", "OK");
+            await DisplayAlert("Error", "This feature is only available on Windows", "OK");
 #endif
         }
 
         /// <summary>
-        /// カメラ停止ボタン
+        /// Stop camera button handler
         /// </summary>
         private void OnStopClicked(object sender, EventArgs e)
         {
@@ -91,7 +91,7 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// カメラを停止する共通メソッド
+        /// Common method to stop camera
         /// </summary>
         private void StopCamera()
         {
@@ -111,7 +111,7 @@ namespace VisionFocus
                 {
                     StartButton.IsEnabled = true;
                     StopButton.IsEnabled = false;
-                    StatusLabel.Text = "停止しました";
+                    StatusLabel.Text = "Stopped";
                     StatusLabel.IsVisible = true;
                 });
             }
@@ -119,7 +119,7 @@ namespace VisionFocus
             {
                 MainThread.BeginInvokeOnMainThread(async () =>
                 {
-                    await DisplayAlert("エラー", $"停止中にエラーが発生しました: {ex.Message}", "OK");
+                    await DisplayAlert("Error", $"An error occurred while stopping: {ex.Message}", "OK");
                 });
             }
 #endif
@@ -127,7 +127,7 @@ namespace VisionFocus
 
 #if WINDOWS
         /// <summary>
-        /// カメラから1フレームをキャプチャして表示
+        /// Capture and display one frame from camera
         /// </summary>
         private async Task CaptureFrameAsync()
         {
@@ -136,21 +136,21 @@ namespace VisionFocus
 
             try
             {
-                // メモリストリームに撮影
+                // Capture to memory stream
                 using var stream = new InMemoryRandomAccessStream();
                 await _mediaCapture.CapturePhotoToStreamAsync(
                     Windows.Media.MediaProperties.ImageEncodingProperties.CreateJpeg(),
                     stream);
 
-                // 画像をデコード
+                // Decode image
                 stream.Seek(0);
                 var decoder = await BitmapDecoder.CreateAsync(stream);
 
-                // ピクセルデータを取得
+                // Get pixel data
                 var pixelData = await decoder.GetPixelDataAsync();
                 var pixels = pixelData.DetachPixelData();
 
-                // JPEGに再エンコード
+                // Re-encode to JPEG
                 using var outputStream = new InMemoryRandomAccessStream();
                 var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.JpegEncoderId, outputStream);
                 encoder.SetPixelData(
@@ -163,12 +163,12 @@ namespace VisionFocus
                     pixels);
                 await encoder.FlushAsync();
 
-                // バイト配列に変換
+                // Convert to byte array
                 var bytes = new byte[outputStream.Size];
                 outputStream.Seek(0);
                 await outputStream.ReadAsync(bytes.AsBuffer(), (uint)bytes.Length, InputStreamOptions.None);
 
-                // メインスレッドでUIを更新
+                // Update UI on main thread
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
                     CameraPreview.Source = ImageSource.FromStream(() => new MemoryStream(bytes));
@@ -176,7 +176,7 @@ namespace VisionFocus
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"キャプチャエラー: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Capture error: {ex.Message}");
             }
         }
 #endif
@@ -184,7 +184,7 @@ namespace VisionFocus
         protected override void OnDisappearing()
         {
             base.OnDisappearing();
-            // ページを離れる時は停止
+            // Stop when leaving the page
             StopCamera();
         }
     }
