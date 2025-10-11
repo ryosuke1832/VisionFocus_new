@@ -1,4 +1,4 @@
-﻿// CameraPage.xaml.cs - Simplified version with timer
+﻿// CameraPage.xaml.cs - Integrated version with monitoring functionality
 
 #if WINDOWS
 using Windows.Media.Capture;
@@ -7,6 +7,8 @@ using Windows.Media.Devices;
 using Windows.Media.MediaProperties;
 using Microsoft.UI.Xaml; // DispatcherTimer
 using System.Runtime.InteropServices.WindowsRuntime;
+using MauiApp = Microsoft.Maui.Controls.Application;
+using MauiThickness = Microsoft.Maui.Thickness;
 #endif
 
 using System.Diagnostics;
@@ -24,6 +26,16 @@ namespace VisionFocus
         private volatile bool _isPaused = false;
         private readonly SemaphoreSlim _captureGate = new(1, 1);
         private byte[]? _latestJpegBytes;
+
+        // Monitoring variables
+        private bool _isMonitoring = false;
+        private CancellationTokenSource? _monitoringCancellationTokenSource;
+        private DateTime? _eyesClosedStartTime = null;
+        private double _consecutiveClosedDuration = 0;
+        private const double ALERT_THRESHOLD = 5.0; // Alert after 5 seconds
+        private const double WARNING_THRESHOLD = 3.0; // Warning after 3 seconds
+        private const int MONITORING_INTERVAL_MS = 1000; // Check every 1 second
+        private const int MONITORING_START_DELAY_MS = 1000; // Start monitoring after 1 second
 
         // Timer settings
         private int _remainingSeconds = 25 * 60; // 25 minutes in seconds
@@ -94,13 +106,307 @@ namespace VisionFocus
                 StartButton.IsVisible = false;
                 ControlButtons.IsVisible = true;
 
+                AddLogEntry("✅ Camera started", LogLevel.Success);
                 Debug.WriteLine("✅ Camera started with auto-save (every 0.5s) and timer");
+
+                // Start monitoring after 1 second delay
+                await Task.Delay(MONITORING_START_DELAY_MS);
+                StartMonitoring();
             }
             catch (Exception ex)
             {
                 await DisplayAlert("Error", $"Camera initialization failed: {ex.Message}", "OK");
+                AddLogEntry($"❌ Camera initialization failed: {ex.Message}", LogLevel.Error);
                 Debug.WriteLine(ex);
             }
+        }
+
+        /// <summary>
+        /// Start monitoring functionality
+        /// </summary>
+        private void StartMonitoring()
+        {
+            try
+            {
+                _isMonitoring = true;
+                _monitoringCancellationTokenSource = new CancellationTokenSource();
+
+                // Initialize tracking variables
+                _eyesClosedStartTime = null;
+                _consecutiveClosedDuration = 0;
+
+                AddLogEntry("🟢 Monitoring started", LogLevel.Success);
+
+                // Start monitoring loop
+                _ = Task.Run(() => MonitoringLoopAsync(_monitoringCancellationTokenSource.Token));
+            }
+            catch (Exception ex)
+            {
+                AddLogEntry($"❌ Monitoring start error: {ex.Message}", LogLevel.Error);
+            }
+        }
+
+        /// <summary>
+        /// Stop monitoring functionality
+        /// </summary>
+        private void StopMonitoring()
+        {
+            if (_isMonitoring)
+            {
+                _isMonitoring = false;
+                _monitoringCancellationTokenSource?.Cancel();
+
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    AddLogEntry("⏹️ Monitoring stopped", LogLevel.Info);
+                });
+            }
+        }
+
+        /// <summary>
+        /// Monitoring loop: continuously calls API and monitors eye state
+        /// </summary>
+        private async Task MonitoringLoopAsync(CancellationToken cancellationToken)
+        {
+            while (_isMonitoring && !cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    // Skip monitoring when paused
+                    if (_isPaused)
+                    {
+                        await Task.Delay(MONITORING_INTERVAL_MS, cancellationToken);
+                        continue;
+                    }
+
+                    // Get latest image
+                    string imagePath = ImageHelper.GetImagePath(RealtimePicFilename);
+                    if (!File.Exists(imagePath))
+                    {
+                        await Task.Delay(MONITORING_INTERVAL_MS, cancellationToken);
+                        continue;
+                    }
+
+                    // Record API call start time
+                    var startTime = DateTime.Now;
+
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                    {
+                        AddLogEntry($"📤 Analyzing image...", LogLevel.Info);
+                    });
+
+                    // Call Roboflow API
+                    string jsonResponse = await RoboflowService.InferImageAsync(imagePath);
+
+                    // Record API call end time
+                    var endTime = DateTime.Now;
+                    var responseTime = (endTime - startTime).TotalMilliseconds;
+
+                    // Parse response
+                    string parsedResult = RoboflowService.ParseResponse(jsonResponse);
+
+                    // Determine eye state
+                    EyeState eyeState = DetermineEyeState(parsedResult);
+
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                    {
+                        AddLogEntry($"📥 Response received ({responseTime:F0}ms)", LogLevel.Info);
+                        ProcessEyeState(eyeState, parsedResult);
+                    });
+
+                    Debug.WriteLine($"API Response: {jsonResponse}");
+                }
+                catch (OperationCanceledException)
+                {
+                    // Cancelled - normal exit
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                    {
+                        AddLogEntry($"❌ Error: {ex.Message}", LogLevel.Error);
+                    });
+                    Debug.WriteLine($"Monitoring error: {ex}");
+                }
+
+                // Wait before next check
+                try
+                {
+                    await Task.Delay(MONITORING_INTERVAL_MS, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Determine eye state from API response
+        /// </summary>
+        private EyeState DetermineEyeState(string parsedResult)
+        {
+            if (string.IsNullOrWhiteSpace(parsedResult))
+                return EyeState.Unknown;
+
+            // Check for "No detection found"
+            if (parsedResult.Contains("No detection found") ||
+                parsedResult.Contains("no detection"))
+            {
+                return EyeState.Unknown;
+            }
+
+            // Check if eyes are closed
+            if (parsedResult.Contains("eyes_closed", StringComparison.OrdinalIgnoreCase) ||
+                parsedResult.Contains("closed", StringComparison.OrdinalIgnoreCase))
+            {
+                return EyeState.Closed;
+            }
+
+            // Check if eyes are open
+            if (parsedResult.Contains("eyes_open", StringComparison.OrdinalIgnoreCase) ||
+                parsedResult.Contains("open", StringComparison.OrdinalIgnoreCase))
+            {
+                return EyeState.Open;
+            }
+
+            return EyeState.Unknown;
+        }
+
+        /// <summary>
+        /// Process eye state and trigger alerts if needed
+        /// </summary>
+        private void ProcessEyeState(EyeState eyeState, string detectionDetails)
+        {
+            var now = DateTime.Now;
+
+            switch (eyeState)
+            {
+                case EyeState.Closed:
+                    // Eyes are closed
+                    if (_eyesClosedStartTime == null)
+                    {
+                        // First detection of closed eyes
+                        _eyesClosedStartTime = now;
+                        _consecutiveClosedDuration = 0;
+                        AddLogEntry("👁️ Eyes closed detected", LogLevel.Warning);
+                    }
+                    else
+                    {
+                        // Eyes continuously closed
+                        _consecutiveClosedDuration = (now - _eyesClosedStartTime.Value).TotalSeconds;
+
+                        if (_consecutiveClosedDuration >= ALERT_THRESHOLD)
+                        {
+                            // Closed for 5+ seconds - ALERT
+                            AddLogEntry($"🚨 [ALERT] Eyes closed for {_consecutiveClosedDuration:F1}s!", LogLevel.Alert);
+                        }
+                        else if (_consecutiveClosedDuration >= WARNING_THRESHOLD)
+                        {
+                            // Closed for 3+ seconds - WARNING
+                            AddLogEntry($"⚠️ [WARNING] Eyes closed for {_consecutiveClosedDuration:F1}s", LogLevel.Warning);
+                        }
+                    }
+                    break;
+
+                case EyeState.Open:
+                    // Eyes are open
+                    if (_eyesClosedStartTime != null)
+                    {
+                        // Eyes opened, reset closed duration
+                        var closedDuration = (now - _eyesClosedStartTime.Value).TotalSeconds;
+
+                        if (closedDuration >= ALERT_THRESHOLD)
+                        {
+                            AddLogEntry($"✅ Eyes opened (were closed for {closedDuration:F1}s)", LogLevel.Success);
+                        }
+                        else if (closedDuration >= WARNING_THRESHOLD)
+                        {
+                            AddLogEntry($"👁️ Eyes opened (were closed for {closedDuration:F1}s)", LogLevel.Info);
+                        }
+                        else
+                        {
+                            AddLogEntry("👁️ Eyes opened", LogLevel.Success);
+                        }
+
+                        _eyesClosedStartTime = null;
+                        _consecutiveClosedDuration = 0;
+                    }
+                    else
+                    {
+                        AddLogEntry("✅ Eyes are open", LogLevel.Success);
+                    }
+                    break;
+
+                case EyeState.Unknown:
+                    // Could not detect
+                    AddLogEntry("❓ Could not detect eye state", LogLevel.Warning);
+                    // Reset counter when detection fails
+                    _eyesClosedStartTime = null;
+                    _consecutiveClosedDuration = 0;
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Add a log entry to the display
+        /// </summary>
+        private void AddLogEntry(string message, LogLevel level)
+        {
+            var timestamp = DateTime.Now.ToString("HH:mm:ss");
+            var logText = $"[{timestamp}] {message}";
+
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                var label = new Label
+                {
+                    Text = logText,
+                    FontSize = 12,
+#if WINDOWS
+                    Padding = new MauiThickness(5, 2),
+#else
+                    Padding = new Thickness(5, 2),
+#endif
+                    TextColor = GetLogColor(level)
+                };
+
+                LogContainer.Children.Add(label);
+
+                // Auto-scroll to bottom
+                Device.BeginInvokeOnMainThread(async () =>
+                {
+                    await Task.Delay(50);
+                    await LogScrollView.ScrollToAsync(label, ScrollToPosition.End, true);
+                });
+
+                // If log exceeds 100 entries, remove oldest
+                if (LogContainer.Children.Count > 100)
+                {
+                    LogContainer.Children.RemoveAt(0);
+                }
+            });
+        }
+
+        /// <summary>
+        /// Get color based on log level
+        /// </summary>
+        private Color GetLogColor(LogLevel level)
+        {
+#if WINDOWS
+            var isDark = MauiApp.Current?.RequestedTheme == AppTheme.Dark;
+#else
+            var isDark = Application.Current?.RequestedTheme == AppTheme.Dark;
+#endif
+            return level switch
+            {
+                LogLevel.Success => Colors.Green,
+                LogLevel.Info => isDark ? Colors.White : Colors.Black,
+                LogLevel.Warning => Colors.Orange,
+                LogLevel.Error => Colors.Red,
+                LogLevel.Alert => Colors.Red,
+                _ => isDark ? Colors.White : Colors.Black
+            };
         }
 
         /// <summary>
@@ -393,12 +699,14 @@ namespace VisionFocus
             {
                 PauseButton.Text = "▶";
                 PauseButton.BackgroundColor = Color.FromArgb("#4CAF50");
+                AddLogEntry("⏸️ Session paused", LogLevel.Info);
                 Debug.WriteLine("Session paused");
             }
             else
             {
                 PauseButton.Text = "⏸";
                 PauseButton.BackgroundColor = Color.FromArgb("#FF9800");
+                AddLogEntry("▶️ Session resumed", LogLevel.Info);
                 Debug.WriteLine("Session resumed");
             }
 #endif
@@ -409,42 +717,6 @@ namespace VisionFocus
             StopCamera();
         }
 
-        private async void OnJudgeClicked(object sender, EventArgs e)
-        {
-            try
-            {
-                // Judge the RealtimePic.jpg file
-                string realtimePicPath = ImageHelper.GetImagePath(RealtimePicFilename);
-
-                if (!File.Exists(realtimePicPath))
-                {
-                    await DisplayAlert("Error", $"'{RealtimePicFilename}' not found. Please start the camera first.", "OK");
-                    return;
-                }
-
-                JudgeButton.IsEnabled = false;
-                JudgeButton.Text = "⏳ Processing...";
-                ResultContainer.IsVisible = true;
-                ResultLabel.Text = "Sending image to Roboflow API...\nPlease wait...";
-
-                string jsonResponse = await RoboflowService.InferImageAsync(realtimePicPath);
-                string parsedResult = RoboflowService.ParseResponse(jsonResponse);
-
-                ResultLabel.Text = $"Image: {RealtimePicFilename}\n\n{parsedResult}";
-                Debug.WriteLine($"API Response: {jsonResponse}");
-            }
-            catch (Exception ex)
-            {
-                await DisplayAlert("Error", $"Failed to process image: {ex.Message}", "OK");
-                ResultLabel.Text = $"Error: {ex.Message}";
-            }
-            finally
-            {
-                JudgeButton.IsEnabled = true;
-                JudgeButton.Text = "🔍 Judge Latest Image";
-            }
-        }
-
         private void StopCamera()
         {
 #if WINDOWS
@@ -452,6 +724,9 @@ namespace VisionFocus
             {
                 _isCapturing = false;
                 _isPaused = false;
+
+                // Stop monitoring
+                StopMonitoring();
 
                 // Stop all timers
                 _previewTimer?.Stop();
@@ -485,6 +760,8 @@ namespace VisionFocus
                     // Reset pause button
                     PauseButton.Text = "⏸";
                     PauseButton.BackgroundColor = Color.FromArgb("#FF9800");
+
+                    AddLogEntry("⏹️ Camera stopped", LogLevel.Info);
                 });
 
                 Debug.WriteLine("Camera stopped");
@@ -505,6 +782,28 @@ namespace VisionFocus
         {
             base.OnDisappearing();
             StopCamera();
+        }
+
+        /// <summary>
+        /// Eye state enumeration
+        /// </summary>
+        private enum EyeState
+        {
+            Open,      // Eyes are open
+            Closed,    // Eyes are closed
+            Unknown    // Cannot determine
+        }
+
+        /// <summary>
+        /// Log level for color coding
+        /// </summary>
+        private enum LogLevel
+        {
+            Success,   // Green
+            Info,      // Default color
+            Warning,   // Orange
+            Error,     // Red
+            Alert      // Red (critical)
         }
     }
 }

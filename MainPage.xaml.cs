@@ -16,11 +16,13 @@
         }
 
         /// <summary>
-        /// Navigate to Monitoring Page 
+        /// Monitoring feature is now integrated into Camera Page
         /// </summary>
         private async void OnMonitoringClicked(object sender, EventArgs e)
         {
-            await Shell.Current.GoToAsync(nameof(MonitoringPage));
+            await DisplayAlert("Notice",
+                "Monitoring feature is now integrated into the Camera page.\nPress 'Start Camera' to begin monitoring.",
+                "OK");
         }
 
         /// <summary>

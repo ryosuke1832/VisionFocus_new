@@ -40,9 +40,6 @@
 	  <MauiXaml Update="ImagePreviewPage.xaml">
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
-	  <MauiXaml Update="MonitoringPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
 	</ItemGroup>
 
 	<!-- Ensure CapturedImages folder exists and is copied -->

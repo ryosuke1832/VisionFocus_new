@@ -8,7 +8,6 @@
 
             // Register routes for navigation
             Routing.RegisterRoute(nameof(CameraPage), typeof(CameraPage));
-            Routing.RegisterRoute(nameof(MonitoringPage), typeof(MonitoringPage));
             Routing.RegisterRoute(nameof(ImagePreviewPage), typeof(ImagePreviewPage));
         }
     }

@@ -4,7 +4,7 @@
              x:Class="VisionFocus.CameraPage"
              Title="SessionMode">
 
-    <Grid RowDefinitions="Auto, *, Auto" Padding="0">
+    <Grid RowDefinitions="Auto, *, Auto, Auto" Padding="0">
         <!-- Header Area -->
         <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" Padding="20,20,20,10">
             <!-- Back Button (Left) -->
@@ -52,8 +52,25 @@
                    VerticalOptions="Fill" />
         </Border>
 
+        <!-- Log Display Area -->
+        <Border Grid.Row="2"
+                BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}"
+                StrokeThickness="1"
+                Stroke="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
+                Margin="20,10,20,10"
+                HeightRequest="150">
+            <Border.StrokeShape>
+                <RoundRectangle CornerRadius="10" />
+            </Border.StrokeShape>
+            <ScrollView x:Name="LogScrollView">
+                <VerticalStackLayout x:Name="LogContainer"
+                                   Padding="10"
+                                   Spacing="5" />
+            </ScrollView>
+        </Border>
+
         <!-- Control Buttons Area -->
-        <Grid Grid.Row="2" Padding="20">
+        <Grid Grid.Row="3" Padding="20,0,20,20">
             <!-- Start Button (Red Circle) -->
             <Button x:Name="StartButton"
                     Text="Start"
@@ -94,39 +111,6 @@
                         CornerRadius="40"
                         FontSize="32" />
             </HorizontalStackLayout>
-        </Grid>
-
-        <!-- Judge Button and Result Area -->
-        <Grid Grid.Row="2" RowDefinitions="*, Auto, Auto" Padding="20" VerticalOptions="End">
-            <Button x:Name="JudgeButton"
-                    Grid.Row="1"
-                    Text="🔍 Judge RealtimePic.jpg"
-                    Clicked="OnJudgeClicked"
-                    BackgroundColor="#9C27B0"
-                    TextColor="White"
-                    HeightRequest="50"
-                    FontSize="16"
-                    Margin="0,0,0,10" />
-
-            <Border Grid.Row="2"
-                    BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray950}}"
-                    StrokeThickness="1"
-                    Stroke="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
-                    Padding="15"
-                    MinimumHeightRequest="100"
-                    IsVisible="False"
-                    x:Name="ResultContainer">
-                <Border.StrokeShape>
-                    <RoundRectangle CornerRadius="10" />
-                </Border.StrokeShape>
-                <ScrollView>
-                    <Label x:Name="ResultLabel"
-                           Text=""
-                           TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"
-                           FontSize="14"
-                           LineBreakMode="WordWrap" />
-                </ScrollView>
-            </Border>
         </Grid>
     </Grid>
 </ContentPage>

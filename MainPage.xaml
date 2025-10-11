@@ -21,7 +21,7 @@
                              VerticalOptions="Center"
                              HorizontalOptions="Center"
                              WidthRequest="300">
-            <Button Text="📷 Start Camera"
+            <Button Text="📷 Start Camera &amp; Monitoring"
                     Clicked="OnCameraClicked"
                     BackgroundColor="#512BD4"
                     TextColor="White"
@@ -29,7 +29,7 @@
                     FontSize="18"
                     CornerRadius="15" />
 
-            <Button Text="🔄Continiou judge"
+            <Button Text="ℹ️ About Monitoring"
                     Clicked="OnMonitoringClicked"
                     BackgroundColor="#9C27B0"
                     TextColor="White"
