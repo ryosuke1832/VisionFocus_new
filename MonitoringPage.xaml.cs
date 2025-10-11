@@ -4,10 +4,10 @@ namespace VisionFocus
 {
     public partial class MonitoringPage : ContentPage
     {
-        private System.Threading.Timer? _monitoringTimer;
+        private Task? _monitoringTask;
+        private CancellationTokenSource? _cancellationTokenSource;
         private bool _isMonitoring = false;
         private int _checkCount = 0;
-        private const int CheckIntervalSeconds = 4;
 
         public MonitoringPage()
         {
@@ -28,19 +28,15 @@ namespace VisionFocus
             // Update UI
             StartButton.IsEnabled = false;
             StopButton.IsEnabled = true;
-            StatusLabel.Text = "Monitoring... (Checking every 4 seconds)";
+            StatusLabel.Text = "Monitoring... (Continuous checking)";
 
             // Clear log
             LogContainer.Children.Clear();
             AddLogEntry("Monitoring started", "#4CAF50");
 
-            // Start timer (execute immediately once, then every 4 seconds)
-            _monitoringTimer = new System.Threading.Timer(
-                async _ => await PerformCheckAsync(),
-                null,
-                TimeSpan.Zero,
-                TimeSpan.FromSeconds(CheckIntervalSeconds)
-            );
+            // Start monitoring loop
+            _cancellationTokenSource = new CancellationTokenSource();
+            _monitoringTask = Task.Run(() => MonitoringLoopAsync(_cancellationTokenSource.Token));
         }
 
         /// <summary>
@@ -61,9 +57,8 @@ namespace VisionFocus
 
             _isMonitoring = false;
 
-            // Stop timer
-            _monitoringTimer?.Dispose();
-            _monitoringTimer = null;
+            // Cancel monitoring task
+            _cancellationTokenSource?.Cancel();
 
             // Update UI
             MainThread.BeginInvokeOnMainThread(() =>
@@ -76,7 +71,36 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Periodic check process
+        /// Monitoring loop - continuously checks after each API response
+        /// </summary>
+        private async Task MonitoringLoopAsync(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested && _isMonitoring)
+            {
+                try
+                {
+                    await PerformCheckAsync();
+                }
+                catch (Exception ex)
+                {
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                    {
+                        string timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
+                        AddLogEntry($"[{timestamp}] Error: {ex.Message}", "#F44336");
+                        Debug.WriteLine($"[Monitoring] Error: {ex.Message}");
+                    });
+                }
+
+                // Small delay to prevent overwhelming the system
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    await Task.Delay(100, cancellationToken);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Perform single check with timing information
         /// </summary>
         private async Task PerformCheckAsync()
         {
@@ -86,15 +110,15 @@ namespace VisionFocus
             try
             {
                 _checkCount++;
-                string timestamp = DateTime.Now.ToString("HH:mm:ss");
 
                 // Get latest image
                 var imagePaths = ImageHelper.GetAllImagePaths();
                 if (imagePaths.Count == 0)
                 {
+                    string errorTime = DateTime.Now.ToString("HH:mm:ss.fff");
                     await MainThread.InvokeOnMainThreadAsync(() =>
                     {
-                        AddLogEntry($"[{timestamp}] Error: No images found", "#FF9800");
+                        AddLogEntry($"[{errorTime}] Error: No images found", "#FF9800");
                     });
                     return;
                 }
@@ -102,34 +126,49 @@ namespace VisionFocus
                 string latestImagePath = imagePaths[0];
                 string fileName = Path.GetFileName(latestImagePath);
 
-                // Log check start
+                // Record send time
+                DateTime sendTime = DateTime.Now;
+                string sendTimeStr = sendTime.ToString("HH:mm:ss.fff");
+
+                // Log check start with send time
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    AddLogEntry($"[{timestamp}] Check #{_checkCount}: {fileName}", "#2196F3");
+                    AddLogEntry($"„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª", "#E0E0E0");
+                    AddLogEntry($"Check #{_checkCount}: {fileName}", "#2196F3");
+                    AddLogEntry($"?? API Sent: {sendTimeStr}", "#9C27B0");
                 });
 
                 // Send to API
                 string jsonResponse = await RoboflowService.InferImageAsync(latestImagePath);
+
+                // Record receive time
+                DateTime receiveTime = DateTime.Now;
+                string receiveTimeStr = receiveTime.ToString("HH:mm:ss.fff");
+                TimeSpan responseTime = receiveTime - sendTime;
+
                 string parsedResult = RoboflowService.ParseResponse(jsonResponse);
 
-                // Display result
+                // Display result with timing information
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    AddLogEntry($"[{timestamp}] Result:", "#4CAF50");
+                    AddLogEntry($"?? API Received: {receiveTimeStr}", "#9C27B0");
+                    AddLogEntry($"??  Response Time: {responseTime.TotalMilliseconds:F0}ms", "#FF9800");
+                    AddLogEntry($"Result:", "#4CAF50");
                     AddLogEntry(parsedResult, "#333333", isIndented: true);
 
                     // Scroll log to bottom
                     ScrollToBottom();
                 });
 
-                Debug.WriteLine($"[Monitoring] Check #{_checkCount} completed at {timestamp}");
+                Debug.WriteLine($"[Monitoring] Check #{_checkCount} | Send: {sendTimeStr} | Receive: {receiveTimeStr} | Response: {responseTime.TotalMilliseconds}ms");
             }
             catch (Exception ex)
             {
+                DateTime errorTime = DateTime.Now;
+                string errorTimeStr = errorTime.ToString("HH:mm:ss.fff");
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    string timestamp = DateTime.Now.ToString("HH:mm:ss");
-                    AddLogEntry($"[{timestamp}] Error: {ex.Message}", "#F44336");
+                    AddLogEntry($"[{errorTimeStr}] Error: {ex.Message}", "#F44336");
                     Debug.WriteLine($"[Monitoring] Error: {ex.Message}");
                 });
             }

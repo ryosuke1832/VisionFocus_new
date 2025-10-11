@@ -11,7 +11,7 @@
             <Label Text="Eye State Monitoring"
                    Style="{StaticResource Headline}"
                    SemanticProperties.HeadingLevel="Level1" />
-            <Label Text="Automatic monitoring every 4 seconds"
+            <Label Text="Continuous monitoring (API → Response → Next API)"
                    Style="{StaticResource SubHeadline}"
                    SemanticProperties.HeadingLevel="Level2" />
         </VerticalStackLayout>
