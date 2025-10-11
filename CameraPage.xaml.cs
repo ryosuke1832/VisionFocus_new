@@ -19,7 +19,10 @@ namespace VisionFocus
         private System.Timers.Timer? _timer;
         private bool _isCapturing = false;
         private byte[]? _latestFrameBytes;
-        private int _captureBusy = 0;                    
+        private int _captureBusy = 0;
+#endif
+#if WINDOWS
+        private float _expComp = 0.0f;  
 #endif
 
         public CameraPage()
@@ -114,22 +117,21 @@ namespace VisionFocus
         {
             var v = mediaCapture.VideoDeviceController;
 
-            // 露出はまず完全オート
             if (v.ExposureControl.Supported)
                 await v.ExposureControl.SetAutoAsync(true);
+            if (v.IsoSpeedControl.Supported)
+                await v.IsoSpeedControl.SetAutoAsync();
 
-            // 露出補償は 0.0 に戻す（白飛び時は -0.3〜-0.7 に）
+
+            _expComp = -0.7f; 
             if (v.ExposureCompensationControl.Supported)
-                await v.ExposureCompensationControl.SetValueAsync(0.0f);
+                await v.ExposureCompensationControl.SetValueAsync(_expComp);
 
-            // フリッカー（必要に応じて 50/60Hz）
             v.TrySetPowerlineFrequency(PowerlineFrequency.FiftyHertz);
 
-            // ホワイトバランスはAUTO
             if (v.WhiteBalanceControl.Supported)
                 await v.WhiteBalanceControl.SetPresetAsync(ColorTemperaturePreset.Auto);
 
-            // フォーカス（連続AF）
             if (v.FocusControl.Supported)
             {
                 var focus = v.FocusControl;
@@ -142,23 +144,21 @@ namespace VisionFocus
                 await focus.FocusAsync();
             }
 
-            // 白飛びを助長する機能は一旦OFFに
-            if (v.BacklightCompensation != null && v.BacklightCompensation.Capabilities.Supported)
-                v.BacklightCompensation.TrySetValue(0); // OFF
 
+            if (v.BacklightCompensation != null && v.BacklightCompensation.Capabilities.Supported)
+                v.BacklightCompensation.TrySetValue(0); 
             if (v.HdrVideoControl.Supported)
                 v.HdrVideoControl.Mode = HdrVideoMode.Off;
-
             if (v.VideoTemporalDenoisingControl.Supported)
                 v.VideoTemporalDenoisingControl.Mode = VideoTemporalDenoisingMode.Off;
 
-            // 明るすぎる環境での露出固定（必要時のみ有効化）
-            // if (v.ExposureControl.Supported)
-            // {
-            //     await v.ExposureControl.SetAutoAsync(false);
-            //     await v.ExposureControl.SetValueAsync(TimeSpan.FromMilliseconds(8)); // ≒1/125s
-            // }
+             if (v.ExposureControl.Supported)
+            {
+                await v.ExposureControl.SetAutoAsync(false);
+                await v.ExposureControl.SetValueAsync(TimeSpan.FromMilliseconds(6)); // ≒1/166s
+            }
         }
+
 
 #endif
 
