@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="VisionFocus.StatisticsPage"
+             Title="Statistics">
+
+    <Grid RowDefinitions="Auto, *" Padding="20">
+        <!-- Header with Back Button -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto, *" Padding="0,0,0,20">
+            <Button Grid.Column="0"
+                    Text="←"
+                    Clicked="OnBackClicked"
+                    BackgroundColor="Transparent"
+                    TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"
+                    FontSize="32"
+                    WidthRequest="50"
+                    HeightRequest="50"
+                    Padding="0" />
+
+            <Label Grid.Column="1"
+                   Text="Statistics"
+                   FontSize="28"
+                   FontAttributes="Bold"
+                   VerticalOptions="Center"
+                   HorizontalOptions="Start"
+                   Margin="10,0,0,0" />
+        </Grid>
+
+        <!-- Content Area -->
+        <VerticalStackLayout Grid.Row="1"
+                             VerticalOptions="Center"
+                             HorizontalOptions="Center"
+                             Spacing="20">
+            <Label Text="Temporary"
+                   FontSize="32"
+                   FontAttributes="Bold"
+                   HorizontalOptions="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+
+            <Label Text="Statistics page is under development"
+                   FontSize="16"
+                   HorizontalOptions="Center"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray500}}" />
+        </VerticalStackLayout>
+    </Grid>
+
+</ContentPage>

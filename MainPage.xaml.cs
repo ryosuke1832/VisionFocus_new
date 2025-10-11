@@ -1,4 +1,6 @@
-﻿namespace VisionFocus
+﻿using Windows.UI.ApplicationSettings;
+
+namespace VisionFocus
 {
     public partial class MainPage : ContentPage
     {
@@ -16,29 +18,27 @@
         }
 
         /// <summary>
-        /// Monitoring feature is now integrated into Camera Page
+        /// Navigate to Statistics Page
         /// </summary>
         private async void OnMonitoringClicked(object sender, EventArgs e)
         {
-            await DisplayAlert("Notice",
-                "Monitoring feature is now integrated into the Camera page.\nPress 'Start Camera' to begin monitoring.",
-                "OK");
+            await Shell.Current.GoToAsync(nameof(StatisticsPage));
         }
 
         /// <summary>
-        /// Navigate to Gallery Page (planned for future implementation)
+        /// Navigate to History Page
         /// </summary>
         private async void OnGalleryClicked(object sender, EventArgs e)
         {
-            await DisplayAlert("Notice", "Gallery feature is currently under development", "OK");
+            await Shell.Current.GoToAsync(nameof(HistoryPage));
         }
 
         /// <summary>
-        /// Navigate to Settings Page (planned for future implementation)
+        /// Navigate to Settings Page
         /// </summary>
         private async void OnSettingsClicked(object sender, EventArgs e)
         {
-            await DisplayAlert("Notice", "Settings feature is currently under development", "OK");
+            await Shell.Current.GoToAsync(nameof(SettingsPage));
         }
     }
 }
