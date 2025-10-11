@@ -1,9 +1,10 @@
 {
-  "SessionDurationMinutes": 25,
+  "SessionDurationMinutes": 42,
   "Subjects": [
     "Math",
     "Science",
-    "English"
+    "English",
+    "C#"
   ],
   "AlertThresholdSeconds": 5,
   "WarningThresholdSeconds": 3,
