@@ -1,4 +1,4 @@
-﻿// CameraPage.xaml.cs - 置き換え版（Windows最適化、無駄な再エンコード排除）
+﻿// CameraPage.xaml.cs - Windows optimized version with no redundant re-encoding
 
 #if WINDOWS
 using Windows.Media.Capture;
@@ -22,13 +22,13 @@ namespace VisionFocus
         private readonly SemaphoreSlim _captureGate = new(1, 1);
         private byte[]? _latestJpegBytes;
 
-        // 露出補正の目安（白飛び対策）
-        private float _expComp = -1.0f;
+        // Exposure compensation value (for brightness adjustment)
+        private float _expComp = 0.5f;
 
-        // タイマーフレーム間隔（ms）: 100ms ≒ 10fps
+        // Timer frame interval (ms): 100ms ≈ 10fps
         private const int PreviewIntervalMs = 100;
 
-        // 目標解像度（存在しなければ最も近いものを選ぶ）
+        // Target resolution (will select closest if exact match not available)
         private const uint TargetWidth = 1280;
         private const uint TargetHeight = 720;
 #endif
@@ -53,9 +53,9 @@ namespace VisionFocus
             try
             {
                 StatusLabel.IsVisible = true;
-                StatusLabel.Text = "カメラを初期化中...";
+                StatusLabel.Text = "Initializing camera...";
 
-                // MediaCapture 初期化
+                // Initialize MediaCapture
                 _mediaCapture = new MediaCapture();
                 var settings = new MediaCaptureInitializationSettings
                 {
@@ -66,7 +66,7 @@ namespace VisionFocus
 
                 await ConfigureCameraAsync(_mediaCapture);
 
-                // タイマープレビュー開始（10fps）
+                // Start timer preview (10fps)
                 _timer = new DispatcherTimer();
                 _timer.Interval = TimeSpan.FromMilliseconds(PreviewIntervalMs);
                 _timer.Tick += async (_, __) => await CaptureFrameAsync();
@@ -74,35 +74,37 @@ namespace VisionFocus
 
                 _isCapturing = true;
 
-                // UI
+                // Update UI
                 StartButton.IsEnabled = false;
                 StopButton.IsEnabled = true;
                 CaptureButton.IsEnabled = true;
                 StatusLabel.IsVisible = false;
 
-                Debug.WriteLine("✅ ライブプレビュー開始（DispatcherTimer 10fps）");
+                Debug.WriteLine("✅ Live preview started (DispatcherTimer 10fps)");
             }
             catch (Exception ex)
             {
-                await DisplayAlert("エラー", $"カメラの初期化に失敗: {ex.Message}", "OK");
-                StatusLabel.Text = $"エラー: {ex.Message}";
+                await DisplayAlert("Error", $"Camera initialization failed: {ex.Message}", "OK");
+                StatusLabel.Text = $"Error: {ex.Message}";
                 StatusLabel.IsVisible = true;
                 Debug.WriteLine(ex);
             }
         }
 
+        /// <summary>
+        /// Configure camera settings for optimal brightness and quality
+        /// </summary>
         private async Task ConfigureCameraAsync(MediaCapture mediaCapture)
         {
             var vdc = mediaCapture.VideoDeviceController;
 
-            // 実用解像度を優先的に設定（例：1280x720）
+            // Resolution setting (prioritize 1280x720)
             try
             {
                 var all = vdc.GetAvailableMediaStreamProperties(MediaStreamType.VideoPreview)
                              .OfType<VideoEncodingProperties>()
                              .ToList();
 
-                // 1280x720 優先、なければ面積が小さい順で最初
                 var target = all.FirstOrDefault(p => p.Width == TargetWidth && p.Height == TargetHeight)
                           ?? all.OrderBy(p => (long)p.Width * p.Height).FirstOrDefault();
 
@@ -114,28 +116,45 @@ namespace VisionFocus
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"解像度設定に失敗: {ex.Message}");
+                Debug.WriteLine($"Failed to set resolution: {ex.Message}");
             }
 
-            // 電源周波数（フリッカ抑制）
+            // Power line frequency (flicker reduction)
             try
             {
                 vdc.TrySetPowerlineFrequency(PowerlineFrequency.FiftyHertz);
             }
             catch { /* ignore */ }
 
-            // 自動露出 & ISO
+            // Enable auto exposure
             try
             {
                 if (vdc.ExposureControl.Supported)
+                {
                     await vdc.ExposureControl.SetAutoAsync(true);
-
-                if (vdc.IsoSpeedControl.Supported)
-                    await vdc.IsoSpeedControl.SetAutoAsync();
+                    Debug.WriteLine("✅ Auto exposure enabled");
+                }
             }
-            catch { /* ignore */ }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Auto exposure setting error: {ex.Message}");
+            }
 
-            // 露出補正（範囲内に収めて設定）
+            // Set ISO speed to auto
+            try
+            {
+                if (vdc.IsoSpeedControl.Supported)
+                {
+                    await vdc.IsoSpeedControl.SetAutoAsync();
+                    Debug.WriteLine("✅ Auto ISO enabled");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"ISO setting error: {ex.Message}");
+            }
+
+            // [IMPORTANT] Set exposure compensation to 0 or +0.5 (to brighten image)
             try
             {
                 if (vdc.ExposureCompensationControl.Supported)
@@ -144,22 +163,34 @@ namespace VisionFocus
                     var max = vdc.ExposureCompensationControl.Max;
                     var step = vdc.ExposureCompensationControl.Step;
 
-                    var clamped = Math.Max(min, Math.Min(max, _expComp));
+                    // Set to +0.5 to brighten (clamp within range)
+                    float targetComp = 0.5f; // 0 = standard, +0.5~+1.0 = brighter
+                    var clamped = Math.Max(min, Math.Min(max, targetComp));
                     await vdc.ExposureCompensationControl.SetValueAsync(clamped);
 
-                    Debug.WriteLine($"露出補正: {clamped} (range {min}..{max}, step {step})");
+                    Debug.WriteLine($"✅ Exposure compensation: {clamped} (range {min}..{max}, step {step})");
                 }
             }
-            catch { /* ignore */ }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Exposure compensation error: {ex.Message}");
+            }
 
-            // WB/フォーカス等（対応デバイスのみ）
+            // Set white balance to auto
             try
             {
                 if (vdc.WhiteBalanceControl.Supported)
+                {
                     await vdc.WhiteBalanceControl.SetPresetAsync(ColorTemperaturePreset.Auto);
+                    Debug.WriteLine("✅ Auto white balance enabled");
+                }
             }
-            catch { /* ignore */ }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"White balance setting error: {ex.Message}");
+            }
 
+            // Set focus to continuous auto focus
             try
             {
                 if (vdc.FocusControl.Supported)
@@ -172,15 +203,31 @@ namespace VisionFocus
                         DisableDriverFallback = false
                     });
                     await focus.FocusAsync();
+                    Debug.WriteLine("✅ Continuous auto focus enabled");
                 }
             }
-            catch { /* ignore */ }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Focus setting error: {ex.Message}");
+            }
 
+            // Enable backlight compensation (for backlighting situations)
             try
             {
                 if (vdc.BacklightCompensation != null && vdc.BacklightCompensation.Capabilities.Supported)
-                    vdc.BacklightCompensation.TrySetValue(0);
+                {
+                    vdc.BacklightCompensation.TrySetValue(1); // Enable
+                    Debug.WriteLine("✅ Backlight compensation enabled");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Backlight compensation error: {ex.Message}");
+            }
 
+            // Turn off HDR and noise reduction (prioritize brightness)
+            try
+            {
                 if (vdc.HdrVideoControl.Supported)
                     vdc.HdrVideoControl.Mode = HdrVideoMode.Off;
 
@@ -188,13 +235,39 @@ namespace VisionFocus
                     vdc.VideoTemporalDenoisingControl.Mode = VideoTemporalDenoisingMode.Off;
             }
             catch { /* ignore */ }
+
+            // Adjust brightness and contrast (if device supports)
+            try
+            {
+                if (vdc.Brightness != null && vdc.Brightness.Capabilities.Supported)
+                {
+                    var brightnessRange = vdc.Brightness.Capabilities;
+                    // Set slightly brighter than center
+                    double targetBrightness = (brightnessRange.Max + brightnessRange.Min) / 2.0 + brightnessRange.Step;
+                    vdc.Brightness.TrySetValue(targetBrightness);
+                    Debug.WriteLine($"✅ Brightness adjusted: {targetBrightness}");
+                }
+
+                if (vdc.Contrast != null && vdc.Contrast.Capabilities.Supported)
+                {
+                    var contrastRange = vdc.Contrast.Capabilities;
+                    // Set contrast slightly higher than standard
+                    double targetContrast = (contrastRange.Max + contrastRange.Min) / 2.0 + contrastRange.Step;
+                    vdc.Contrast.TrySetValue(targetContrast);
+                    Debug.WriteLine($"✅ Contrast adjusted: {targetContrast}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Brightness/Contrast adjustment error: {ex.Message}");
+            }
         }
 
         /// <summary>
-        /// タイマーで JPEG 1枚をキャプチャして Image に表示。
-        /// ※「プレビュー用途」では本来は CaptureElement/FrameReader が理想だが、
-        ///   既存XAML(Image)を活かすため JPEG 直出し＋FromStream で最小変更。
-        ///   ここでは「再デコード→再エンコード」は一切行わない。
+        /// Capture one JPEG frame via timer and display in Image control.
+        /// Note: Ideally CaptureElement/FrameReader would be used for preview,
+        ///       but to maintain existing XAML (Image), we use JPEG direct output + FromStream.
+        ///       No decode->re-encode is performed here.
         /// </summary>
         private async Task CaptureFrameAsync()
         {
@@ -208,7 +281,7 @@ namespace VisionFocus
                 using var stream = new InMemoryRandomAccessStream();
                 await _mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreateJpeg(), stream);
 
-                // そのままバイト列へ（デコード/再エンコードなし）
+                // Convert directly to byte array (no decode/re-encode)
                 stream.Seek(0);
                 using var netStream = stream.AsStreamForRead();
                 using var ms = new MemoryStream();
@@ -219,7 +292,7 @@ namespace VisionFocus
 
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
-                    // 短命 Stream を毎回作るのはGCに厳しいが、最小変更で維持
+                    // Creating short-lived Stream every time is hard on GC, but maintains minimal changes
                     CameraPreview.Source = ImageSource.FromStream(() => new MemoryStream(bytes));
                 });
             }
@@ -260,7 +333,7 @@ namespace VisionFocus
             {
                 if (_latestJpegBytes == null || _latestJpegBytes.Length == 0)
                 {
-                    await DisplayAlert("エラー", "保存可能なフレームがありません", "OK");
+                    await DisplayAlert("Error", "No frame available to save", "OK");
                     return;
                 }
 
@@ -268,15 +341,15 @@ namespace VisionFocus
                 string filePath = ImageHelper.GetImagePath(fileName);
                 await File.WriteAllBytesAsync(filePath, _latestJpegBytes);
 
-                await DisplayAlert("成功", $"画像を保存しました！\n{fileName}", "OK");
-                Debug.WriteLine($"画像保存: {filePath}");
+                await DisplayAlert("Success", $"Image saved successfully!\n{fileName}", "OK");
+                Debug.WriteLine($"Image saved: {filePath}");
             }
             catch (Exception ex)
             {
-                await DisplayAlert("エラー", $"画像の保存に失敗: {ex.Message}", "OK");
+                await DisplayAlert("Error", $"Failed to save image: {ex.Message}", "OK");
             }
 #else
-            await DisplayAlert("未対応", "この機能は Windows でのみ動作します。", "OK");
+            await DisplayAlert("Not Supported", "This feature only works on Windows.", "OK");
 #endif
         }
 
@@ -288,20 +361,20 @@ namespace VisionFocus
                 string folderPath = ImageHelper.ImagesFolderPath;
                 if (Directory.Exists(folderPath))
                 {
-                    // フォルダをエクスプローラで開く
+                    // Open folder in Explorer
                     Process.Start("explorer.exe", folderPath);
                 }
                 else
                 {
-                    await DisplayAlert("エラー", "フォルダが存在しません", "OK");
+                    await DisplayAlert("Error", "Folder does not exist", "OK");
                 }
             }
             catch (Exception ex)
             {
-                await DisplayAlert("エラー", $"フォルダを開けませんでした: {ex.Message}", "OK");
+                await DisplayAlert("Error", $"Failed to open folder: {ex.Message}", "OK");
             }
 #else
-            await DisplayAlert("未対応", "この機能は Windows でのみ動作します。", "OK");
+            await DisplayAlert("Not Supported", "This feature only works on Windows.", "OK");
 #endif
         }
 
@@ -312,7 +385,7 @@ namespace VisionFocus
                 var imagePaths = ImageHelper.GetAllImagePaths();
                 if (imagePaths.Count == 0)
                 {
-                    await DisplayAlert("エラー", "画像が見つかりません。先に画像をキャプチャしてください。", "OK");
+                    await DisplayAlert("Error", "No images found. Please capture an image first.", "OK");
                     return;
                 }
 
@@ -320,25 +393,25 @@ namespace VisionFocus
                 string fileName = Path.GetFileName(latestImagePath);
 
                 JudgeButton.IsEnabled = false;
-                JudgeButton.Text = "⏳ 処理中...";
+                JudgeButton.Text = "⏳ Processing...";
                 ResultContainer.IsVisible = true;
-                ResultLabel.Text = "Roboflow APIに画像を送信中...\nお待ちください...";
+                ResultLabel.Text = "Sending image to Roboflow API...\nPlease wait...";
 
                 string jsonResponse = await RoboflowService.InferImageAsync(latestImagePath);
                 string parsedResult = RoboflowService.ParseResponse(jsonResponse);
 
-                ResultLabel.Text = $"画像: {fileName}\n\n{parsedResult}";
-                Debug.WriteLine($"API応答: {jsonResponse}");
+                ResultLabel.Text = $"Image: {fileName}\n\n{parsedResult}";
+                Debug.WriteLine($"API Response: {jsonResponse}");
             }
             catch (Exception ex)
             {
-                await DisplayAlert("エラー", $"画像の処理に失敗: {ex.Message}", "OK");
-                ResultLabel.Text = $"エラー: {ex.Message}";
+                await DisplayAlert("Error", $"Failed to process image: {ex.Message}", "OK");
+                ResultLabel.Text = $"Error: {ex.Message}";
             }
             finally
             {
                 JudgeButton.IsEnabled = true;
-                JudgeButton.Text = "🔍 最新画像を判定";
+                JudgeButton.Text = "🔍 Judge Latest Image";
             }
         }
 
@@ -349,15 +422,15 @@ namespace VisionFocus
             {
                 _isCapturing = false;
 
-                // タイマー停止
+                // Stop timer
                 _timer?.Stop();
                 _timer = null;
 
-                // 直前フレームの完了待ち（最大500ms）
+                // Wait for last frame to complete (max 500ms)
                 SpinWait.SpinUntil(() =>
                     _captureGate.CurrentCount == 1, millisecondsTimeout: 500);
 
-                // MediaCapture 破棄
+                // Dispose MediaCapture
                 _mediaCapture?.Dispose();
                 _mediaCapture = null;
 
@@ -368,10 +441,10 @@ namespace VisionFocus
                     StartButton.IsEnabled = true;
                     StopButton.IsEnabled = false;
                     CaptureButton.IsEnabled = false;
-                    StatusLabel.Text = "停止";
+                    StatusLabel.Text = "Stopped";
                     StatusLabel.IsVisible = true;
 
-                    // 画面も黒にしたい場合は以下
+                    // Uncomment to clear screen to black
                     // CameraPreview.Source = null;
                 });
             }
@@ -379,11 +452,11 @@ namespace VisionFocus
             {
                 MainThread.BeginInvokeOnMainThread(async () =>
                 {
-                    await DisplayAlert("エラー", $"停止中にエラーが発生: {ex.Message}", "OK");
+                    await DisplayAlert("Error", $"Error during stop: {ex.Message}", "OK");
                 });
             }
 #else
-            // 他プラットフォームは何もしない
+            // No action needed for other platforms
 #endif
         }
 
