@@ -67,6 +67,10 @@ namespace VisionFocus
 
                 // Initialize monitoring service
                 _monitoringService = new EyeMonitoringService();
+                _monitoringService.ImageFileName = "RealtimePic.jpg";
+
+                //for debbuging purposes, use closed eye image
+                //_monitoringService.ImageFileName = "Closed.jpg";
 
                 // Load thresholds from settings
                 var settings = SettingsService.LoadSettings();

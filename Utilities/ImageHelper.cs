@@ -32,7 +32,7 @@
                     }
 
                     // Set path to Resources/Raw/CapturedImages in project source
-                    _imagesFolderPath = Path.Combine(directory.FullName, "Resources", "Raw", "CapturedImage");
+                    _imagesFolderPath = Path.Combine(directory.FullName, "Resources", "Raw", "CapturedImages");
 
                     // Ensure folder exists
                     if (!Directory.Exists(_imagesFolderPath))

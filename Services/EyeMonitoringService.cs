@@ -45,6 +45,7 @@ namespace VisionFocus.Services
         private const double DEFAULT_ALERT_THRESHOLD = 5.0;  // Alert after 5 seconds
         private const double DEFAULT_WARNING_THRESHOLD = 3.0; // Warning after 3 seconds
         private const int MONITORING_INTERVAL_MS = 1000;      // Check every 1 second
+        private const string DEFAULT_IMAGE_FILENAME = "RealtimePic.jpg";
 
         private bool _isMonitoring = false;
         private bool _isPaused = false;
@@ -55,6 +56,12 @@ namespace VisionFocus.Services
         // Settings
         public double AlertThresholdSeconds { get; set; } = DEFAULT_ALERT_THRESHOLD;
         public double WarningThresholdSeconds { get; set; } = DEFAULT_WARNING_THRESHOLD;
+
+        /// <summary>
+        /// Image filename to use for API calls (default: RealtimePic.jpg)
+        /// 実験用に別のファイル名を指定する場合はこのプロパティを変更してください
+        /// </summary>
+        public string ImageFileName { get; set; } = DEFAULT_IMAGE_FILENAME;
 
         // Events
         public event EventHandler<LogEntry>? LogEntryAdded;
@@ -79,7 +86,7 @@ namespace VisionFocus.Services
                 _eyesClosedStartTime = null;
                 _consecutiveClosedDuration = 0;
 
-                AddLog("?? Monitoring started", LogLevel.Success);
+                AddLog($"?? Monitoring started (using: {ImageFileName})", LogLevel.Success);
 
                 // Start monitoring loop
                 _ = Task.Run(() => MonitoringLoopAsync(_cancellationTokenSource.Token));
@@ -139,10 +146,11 @@ namespace VisionFocus.Services
                         continue;
                     }
 
-                    // Get latest image
-                    string imagePath = ImageHelper.GetImagePath("RealtimePic.jpg");
+                    // Get image path using specified filename
+                    string imagePath = ImageHelper.GetImagePath(ImageFileName);
                     if (!File.Exists(imagePath))
                     {
+                        AddLog($"?? Image not found: {ImageFileName}", LogLevel.Warning);
                         await Task.Delay(MONITORING_INTERVAL_MS, cancellationToken);
                         continue;
                     }
@@ -165,7 +173,7 @@ namespace VisionFocus.Services
                     // Determine eye state
                     EyeState eyeState = DetermineEyeState(parsedResult);
 
-                    AddLog($"?? Response received ({responseTime:F0}ms)", LogLevel.Info);
+                    AddLog($"? Response received ({responseTime:F0}ms)", LogLevel.Info);
                     ProcessEyeState(eyeState, parsedResult);
 
                     Debug.WriteLine($"API Response: {jsonResponse}");
@@ -260,7 +268,7 @@ namespace VisionFocus.Services
                 // First detection of closed eyes
                 _eyesClosedStartTime = now;
                 _consecutiveClosedDuration = 0;
-                AddLog("??? Eyes are closed", LogLevel.Warning);
+                AddLog("?? Eyes are closed", LogLevel.Warning);
             }
             else
             {
@@ -297,15 +305,15 @@ namespace VisionFocus.Services
 
                 if (closedDuration >= AlertThresholdSeconds)
                 {
-                    AddLog($"? Eyes opened (were closed for {closedDuration:F1}s)", LogLevel.Success);
+                    AddLog($"?? Eyes opened (were closed for {closedDuration:F1}s)", LogLevel.Success);
                 }
                 else if (closedDuration >= WarningThresholdSeconds)
                 {
-                    AddLog($"??? Eyes opened (were closed for {closedDuration:F1}s)", LogLevel.Info);
+                    AddLog($"?? Eyes opened (were closed for {closedDuration:F1}s)", LogLevel.Info);
                 }
                 else
                 {
-                    AddLog("??? Eyes opened", LogLevel.Success);
+                    AddLog("?? Eyes opened", LogLevel.Success);
                 }
 
                 _eyesClosedStartTime = null;
@@ -313,7 +321,7 @@ namespace VisionFocus.Services
             }
             else
             {
-                AddLog("? Eyes are open", LogLevel.Success);
+                AddLog("?? Eyes are open", LogLevel.Success);
             }
         }
 
