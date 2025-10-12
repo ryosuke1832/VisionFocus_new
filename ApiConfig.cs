@@ -19,3 +19,4 @@
             $"https://detect.roboflow.com/{DATASET_NAME}/{MODEL_VERSION}?api_key={ROBOFLOW_API_KEY}";
     }
 }
+

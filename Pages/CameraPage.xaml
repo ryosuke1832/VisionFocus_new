@@ -25,10 +25,19 @@
                                Spacing="5"
                                HorizontalOptions="End"
                                VerticalOptions="Start">
-                <Label Text="Subject: Temp"
-                       TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"
-                       FontSize="16"
-                       HorizontalOptions="End" />
+                <!-- Subject Picker -->
+                <HorizontalStackLayout Spacing="5" HorizontalOptions="End">
+                    <Label Text="Subject:"
+                           TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"
+                           FontSize="16"
+                           VerticalOptions="Center" />
+                    <Picker x:Name="SubjectPicker"
+                            FontSize="16"
+                            WidthRequest="150"
+                            HorizontalOptions="End"
+                            SelectedIndexChanged="OnSubjectChanged" />
+                </HorizontalStackLayout>
+
                 <Label x:Name="TimerLabel"
                        Text="25:00"
                        TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"

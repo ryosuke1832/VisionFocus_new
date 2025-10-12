@@ -35,16 +35,16 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<MauiXaml Update="CameraPage.xaml">
+		<MauiXaml Update="Pages\CameraPage.xaml">
 			<Generator>MSBuild:Compile</Generator>
 		</MauiXaml>
 		<MauiXaml Update="ImagePreviewPage.xaml">
 			<Generator>MSBuild:Compile</Generator>
 		</MauiXaml>
-		<MauiXaml Update="StatisticsPage.xaml">
+		<MauiXaml Update="Pages\StatisticsPage.xaml">
 			<Generator>MSBuild:Compile</Generator>
 		</MauiXaml>
-		<MauiXaml Update="HistoryPage.xaml">
+		<MauiXaml Update="Pages\HistoryPage.xaml">
 			<Generator>MSBuild:Compile</Generator>
 		</MauiXaml>
 		<MauiXaml Update="SettingsPage.xaml">
@@ -55,9 +55,16 @@
 	<!-- Ensure CapturedImages folder exists and is copied -->
 	<ItemGroup>
 		<None Include="Resources\Raw\CapturedImages\**\*" CopyToOutputDirectory="PreserveNewest" />
+		<None Include="Resources\Data\**\*" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 	<ItemGroup>
 		<Folder Include="Resources\Raw\CapturedImages\" />
+		<Folder Include="Resources\Data\" />
+	</ItemGroup>
+	<ItemGroup>
+	  <MauiAsset Include="Resources\Data\.gitkeep">
+	    <LogicalName>%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
+	  </MauiAsset>
 	</ItemGroup>
 
 </Project>

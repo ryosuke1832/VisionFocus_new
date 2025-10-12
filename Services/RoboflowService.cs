@@ -2,7 +2,7 @@
 using System.Text;
 using System.Text.Json;
 
-namespace VisionFocus
+namespace VisionFocus.Services
 {
     /// <summary>
     /// Service class for communicating with Roboflow API

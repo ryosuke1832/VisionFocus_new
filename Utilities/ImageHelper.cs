@@ -1,4 +1,4 @@
-﻿namespace VisionFocus
+﻿namespace VisionFocus.Utilities
 {
     /// <summary>
     /// Helper class for managing captured images
