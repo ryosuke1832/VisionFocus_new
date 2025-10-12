@@ -1,4 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
+using ScottPlot.Maui;
+
 
 namespace VisionFocus
 {
@@ -9,6 +11,7 @@ namespace VisionFocus
             var builder = MauiApp.CreateBuilder();
             builder
                 .UseMauiApp<App>()
+                .UseScottPlot()
                 .ConfigureFonts(fonts =>
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");

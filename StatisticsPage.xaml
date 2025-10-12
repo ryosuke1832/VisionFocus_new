@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:ScottPlot="clr-namespace:ScottPlot.Maui;assembly=ScottPlot.Maui"
              x:Class="VisionFocus.StatisticsPage"
-             Title="Statistics">
+             Title="Focus Statistics">
 
     <Grid RowDefinitions="Auto, *" Padding="20">
         <!-- Header with Back Button -->
@@ -16,32 +17,35 @@
                     WidthRequest="50"
                     HeightRequest="50"
                     Padding="0" />
-
-            <Label Grid.Column="1"
-                   Text="Statistics"
-                   FontSize="28"
-                   FontAttributes="Bold"
-                   VerticalOptions="Center"
-                   HorizontalOptions="Start"
-                   Margin="10,0,0,0" />
         </Grid>
 
         <!-- Content Area -->
-        <VerticalStackLayout Grid.Row="1"
-                             VerticalOptions="Center"
-                             HorizontalOptions="Center"
-                             Spacing="20">
-            <Label Text="Temporary"
-                   FontSize="32"
-                   FontAttributes="Bold"
-                   HorizontalOptions="Center"
-                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="10"
+                                 Spacing="25">
 
-            <Label Text="Statistics page is under development"
-                   FontSize="16"
-                   HorizontalOptions="Center"
-                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray500}}" />
-        </VerticalStackLayout>
+                <!-- Line Plot Section -->
+                <Label Text="Focus Trend Over Time"
+                       FontSize="20"
+                       FontAttributes="Bold"
+                       HorizontalOptions="Center" />
+
+                <ScottPlot:MauiPlot x:Name="LinePlot"
+                                    HeightRequest="400"
+                                    WidthRequest="700" />
+
+                <!-- Bar Plot Section -->
+                <Label Text="Average Eye Closures by Subject"
+                       FontSize="20"
+                       FontAttributes="Bold"
+                       HorizontalOptions="Center"
+                       Margin="0,10,0,0" />
+
+                <ScottPlot:MauiPlot x:Name="BarPlot"
+                                    HeightRequest="300"
+                                    WidthRequest="650" />
+
+            </VerticalStackLayout>
+        </ScrollView>
     </Grid>
-
 </ContentPage>
