@@ -1,9 +1,10 @@
 ﻿using VisionFocus.Services;
+using VisionFocus.Models;
 
 namespace VisionFocus
 {
     /// <summary>
-    /// Camera Page - UI event handling and service coordination only
+    /// Camera Page - UI event handling and service coordination with session tracking
     /// </summary>
     public partial class CameraPage : ContentPage
     {
@@ -12,8 +13,16 @@ namespace VisionFocus
         private EyeMonitoringService? _monitoringService;
         private SessionTimerService? _timerService;
 
+        // Session tracking
+        private DateTime _sessionStartDate;
+        private TimeSpan _sessionStartTime;
+        private int _sessionDurationMinutes;
+        private Dictionary<int, int> _alertsByMinute = new Dictionary<int, int>();
+        private int _currentMinute = 0;
+        private int _totalAlertCount = 0;
+
         // Constants
-        private const int MONITORING_START_DELAY_MS = 1000; // Delay before monitoring starts
+        private const int MONITORING_START_DELAY_MS = 1000;
 
         // Selected subject
         private string _selectedSubject = string.Empty;
@@ -52,12 +61,100 @@ namespace VisionFocus
         }
 
         /// <summary>
+        /// Initialize session tracking
+        /// </summary>
+        private void InitializeSessionTracking(int durationMinutes)
+        {
+            _sessionStartDate = DateTime.Now.Date;
+            _sessionStartTime = DateTime.Now.TimeOfDay;
+            _sessionDurationMinutes = durationMinutes;
+            _alertsByMinute.Clear();
+            _currentMinute = 0;
+            _totalAlertCount = 0;
+
+            // Initialize all minutes with 0 alerts
+            for (int i = 0; i < durationMinutes; i++)
+            {
+                _alertsByMinute[i] = 0;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"Session tracking initialized: {durationMinutes} minutes");
+        }
+
+        /// <summary>
+        /// Record alert for current minute
+        /// </summary>
+        private void RecordAlert()
+        {
+            if (_alertsByMinute.ContainsKey(_currentMinute))
+            {
+                _alertsByMinute[_currentMinute]++;
+                _totalAlertCount++;
+                System.Diagnostics.Debug.WriteLine($"Alert recorded: Minute {_currentMinute}, Total {_totalAlertCount}");
+            }
+        }
+
+        /// <summary>
+        /// Save session data to files
+        /// </summary>
+        private void SaveSessionData()
+        {
+            try
+            {
+                // Create session summary
+                var summary = new SessionSummary
+                {
+                    Date = _sessionStartDate,
+                    StartTime = _sessionStartTime,
+                    Subject = _selectedSubject,
+                    SessionDurationMinutes = _sessionDurationMinutes,
+                    TotalAlertCount = _totalAlertCount
+                };
+
+                // Create session detail
+                var detail = new SessionDetail
+                {
+                    Date = _sessionStartDate,
+                    StartTime = _sessionStartTime,
+                    Subject = _selectedSubject,
+                    MinuteData = _alertsByMinute
+                        .OrderBy(kvp => kvp.Key)
+                        .Select(kvp => new MinuteAlertData
+                        {
+                            MinuteIndex = kvp.Key,
+                            AlertCount = kvp.Value
+                        })
+                        .ToList()
+                };
+
+                // Save both summary and detail
+                SessionDataService.SaveSessionSummary(summary);
+                SessionDataService.SaveSessionDetail(detail);
+
+                System.Diagnostics.Debug.WriteLine("Session data saved successfully");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error saving session data: {ex.Message}");
+                MainThread.BeginInvokeOnMainThread(async () =>
+                {
+                    await DisplayAlert("Error", $"Failed to save session data: {ex.Message}", "OK");
+                });
+            }
+        }
+
+        /// <summary>
         /// Initialize camera and services
         /// </summary>
         private async Task InitializeServicesAsync()
         {
             try
             {
+                var settings = SettingsService.LoadSettings();
+
+                // Initialize session tracking
+                InitializeSessionTracking(settings.SessionDurationMinutes);
+
                 // Initialize camera service
                 _cameraService = new CameraService();
                 _cameraService.FrameCaptured += OnFrameCaptured;
@@ -67,16 +164,8 @@ namespace VisionFocus
 
                 // Initialize monitoring service
                 _monitoringService = new EyeMonitoringService();
-                _monitoringService.ImageFileName = "RealtimePic.jpg";
-
-                //for debbuging purposes, use closed eye image
-                //_monitoringService.ImageFileName = "Closed.jpg";
-
-                // Load thresholds from settings
-                var settings = SettingsService.LoadSettings();
                 _monitoringService.AlertThresholdSeconds = settings.AlertThresholdSeconds;
                 _monitoringService.WarningThresholdSeconds = settings.WarningThresholdSeconds;
-
                 _monitoringService.LogEntryAdded += OnLogEntryAdded;
                 _monitoringService.EyeStateChanged += OnEyeStateChanged;
                 _monitoringService.AlertTriggered += OnAlertTriggered;
@@ -102,7 +191,7 @@ namespace VisionFocus
                 StartButton.IsVisible = false;
                 ControlButtons.IsVisible = true;
 
-                // Start monitoring after 1 second
+                // Start monitoring after delay
                 await Task.Delay(MONITORING_START_DELAY_MS);
                 _monitoringService.StartMonitoring();
             }
@@ -115,7 +204,7 @@ namespace VisionFocus
         /// <summary>
         /// Stop all services
         /// </summary>
-        private void StopAllServices()
+        private void StopAllServices(bool saveData = true)
         {
             // Stop monitoring
             _monitoringService?.StopMonitoring();
@@ -125,6 +214,12 @@ namespace VisionFocus
 
             // Stop timer
             _timerService?.Stop();
+
+            // Save session data if requested
+            if (saveData && _totalAlertCount >= 0)
+            {
+                SaveSessionData();
+            }
 
             // Update UI
             MainThread.BeginInvokeOnMainThread(() =>
@@ -140,9 +235,6 @@ namespace VisionFocus
 
         #region Event Handlers - Camera Service
 
-        /// <summary>
-        /// Frame captured event
-        /// </summary>
         private void OnFrameCaptured(object? sender, byte[] imageBytes)
         {
             MainThread.BeginInvokeOnMainThread(() =>
@@ -151,9 +243,6 @@ namespace VisionFocus
             });
         }
 
-        /// <summary>
-        /// Camera error event
-        /// </summary>
         private void OnCameraError(object? sender, string errorMessage)
         {
             MainThread.BeginInvokeOnMainThread(async () =>
@@ -162,17 +251,11 @@ namespace VisionFocus
             });
         }
 
-        /// <summary>
-        /// Camera started event
-        /// </summary>
         private void OnCameraStarted(object? sender, EventArgs e)
         {
             // Additional processing if needed
         }
 
-        /// <summary>
-        /// Camera stopped event
-        /// </summary>
         private void OnCameraStopped(object? sender, EventArgs e)
         {
             // Additional processing if needed
@@ -182,9 +265,6 @@ namespace VisionFocus
 
         #region Event Handlers - Monitoring Service
 
-        /// <summary>
-        /// Log entry added event
-        /// </summary>
         private void OnLogEntryAdded(object? sender, LogEntry entry)
         {
             MainThread.BeginInvokeOnMainThread(() =>
@@ -199,14 +279,12 @@ namespace VisionFocus
 
                 LogContainer.Children.Add(label);
 
-                // Auto-scroll
                 Device.BeginInvokeOnMainThread(async () =>
                 {
                     await Task.Delay(50);
                     await LogScrollView.ScrollToAsync(label, ScrollToPosition.End, true);
                 });
 
-                // Remove oldest log if exceeds 100 entries
                 if (LogContainer.Children.Count > 100)
                 {
                     LogContainer.Children.RemoveAt(0);
@@ -214,37 +292,26 @@ namespace VisionFocus
             });
         }
 
-        /// <summary>
-        /// Eye state changed event
-        /// </summary>
         private void OnEyeStateChanged(object? sender, EyeState eyeState)
         {
-            // Additional processing if needed (e.g., UI changes based on state)
+            // Additional processing if needed
         }
 
-        /// <summary>
-        /// Alert triggered event
-        /// </summary>
         private void OnAlertTriggered(object? sender, EventArgs e)
         {
-            // Additional processing if needed (e.g., turn screen red)
+            // Record alert for current minute
+            RecordAlert();
         }
 
-        /// <summary>
-        /// Warning triggered event
-        /// </summary>
         private void OnWarningTriggered(object? sender, EventArgs e)
         {
-            // Additional processing if needed (e.g., turn screen yellow)
+            // Additional processing if needed
         }
 
         #endregion
 
         #region Event Handlers - Timer Service
 
-        /// <summary>
-        /// Time updated event
-        /// </summary>
         private void OnTimeUpdated(object? sender, int remainingSeconds)
         {
             MainThread.BeginInvokeOnMainThread(() =>
@@ -252,20 +319,31 @@ namespace VisionFocus
                 if (_timerService != null)
                 {
                     TimerLabel.Text = _timerService.FormattedTime;
+
+                    // Calculate current minute (elapsed time)
+                    int totalSeconds = _sessionDurationMinutes * 60;
+                    int elapsedSeconds = totalSeconds - remainingSeconds;
+                    int newMinute = elapsedSeconds / 60;
+
+                    // Update current minute if it changed
+                    if (newMinute != _currentMinute && newMinute < _sessionDurationMinutes)
+                    {
+                        _currentMinute = newMinute;
+                        System.Diagnostics.Debug.WriteLine($"Minute changed to: {_currentMinute}");
+                    }
                 }
             });
         }
 
-        /// <summary>
-        /// Session completed event
-        /// </summary>
         private void OnSessionCompleted(object? sender, EventArgs e)
         {
-            StopAllServices();
+            StopAllServices(saveData: true);
 
             MainThread.BeginInvokeOnMainThread(async () =>
             {
-                await DisplayAlert("Session Complete", "The session has ended", "OK");
+                await DisplayAlert("Session Complete",
+                    $"Session ended!\nTotal alerts: {_totalAlertCount}",
+                    "OK");
             });
         }
 
@@ -273,33 +351,37 @@ namespace VisionFocus
 
         #region UI Event Handlers
 
-        /// <summary>
-        /// Back button click
-        /// </summary>
         private async void OnBackClicked(object sender, EventArgs e)
         {
-            StopAllServices();
+            bool isRunning = ControlButtons.IsVisible;
+
+            if (isRunning)
+            {
+                bool answer = await DisplayAlert(
+                    "Confirm",
+                    "Session is running. Stop and discard data?",
+                    "Yes",
+                    "No"
+                );
+
+                if (!answer) return;
+
+                StopAllServices(saveData: false);
+            }
+
             await Shell.Current.GoToAsync("..");
         }
 
-        /// <summary>
-        /// Start button click
-        /// </summary>
         private async void OnStartClicked(object sender, EventArgs e)
         {
             await InitializeServicesAsync();
         }
 
-        /// <summary>
-        /// Pause button click
-        /// </summary>
         private void OnPauseClicked(object sender, EventArgs e)
         {
-            // Toggle pause for timer and monitoring
             _timerService?.TogglePause();
             _monitoringService?.TogglePause();
 
-            // Toggle button display
             bool isPaused = _timerService?.IsPaused ?? false;
 
             if (isPaused)
@@ -314,26 +396,30 @@ namespace VisionFocus
             }
         }
 
-        /// <summary>
-        /// Stop button click
-        /// </summary>
-        private void OnStopClicked(object sender, EventArgs e)
+        private async void OnStopClicked(object sender, EventArgs e)
         {
-            StopAllServices();
+            bool answer = await DisplayAlert(
+                "Confirm",
+                "Stop session and save data?",
+                "Yes",
+                "No"
+            );
+
+            if (answer)
+            {
+                StopAllServices(saveData: true);
+                await DisplayAlert("Saved",
+                    $"Session data saved!\nTotal alerts: {_totalAlertCount}",
+                    "OK");
+            }
         }
 
-        /// <summary>
-        /// Subject changed event
-        /// </summary>
         private void OnSubjectChanged(object sender, EventArgs e)
         {
             if (SubjectPicker.SelectedIndex >= 0)
             {
                 _selectedSubject = SubjectPicker.SelectedItem?.ToString() ?? string.Empty;
                 System.Diagnostics.Debug.WriteLine($"Selected subject: {_selectedSubject}");
-
-                // If needed, log the selected subject
-                // Example: Save subject information when starting a session
             }
         }
 
@@ -341,9 +427,6 @@ namespace VisionFocus
 
         #region Helper Methods
 
-        /// <summary>
-        /// Get color based on log level
-        /// </summary>
         private Color GetLogColor(LogLevel level)
         {
             var isDark = Application.Current?.RequestedTheme == AppTheme.Dark;
@@ -366,9 +449,13 @@ namespace VisionFocus
         protected override void OnDisappearing()
         {
             base.OnDisappearing();
-            StopAllServices();
 
-            // Dispose resources
+            bool isRunning = ControlButtons.IsVisible;
+            if (isRunning)
+            {
+                StopAllServices(saveData: false);
+            }
+
             _cameraService?.Dispose();
             _monitoringService?.Dispose();
             _timerService?.Dispose();
