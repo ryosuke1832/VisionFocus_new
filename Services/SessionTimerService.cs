@@ -7,7 +7,7 @@ namespace VisionFocus.Services
     /// <summary>
     /// Session timer management service
     /// </summary>
-    public class SessionTimerService : IDisposable
+    public class SessionTimerService : ITimerService
     {
 #if WINDOWS
         private DispatcherTimer? _timer;

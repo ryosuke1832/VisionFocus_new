@@ -18,6 +18,7 @@ namespace VisionFocus
 
     /// <summary>
     /// Service class for playing alert sounds
+    /// Now supports both enum-based and polymorphic strategy-based approach
     /// </summary>
     public static class AlertSoundService
     {
@@ -50,14 +51,13 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Play alert sound
+        /// Play alert sound -original
         /// </summary>
         public static void PlaySound(AlertSoundType soundType, double volume = 0.8)
         {
 #if WINDOWS
             try
             {
-                // Use Windows MessageBeep API
                 uint beepType = soundType switch
                 {
                     AlertSoundType.Beep => MB_OK,
@@ -75,9 +75,41 @@ namespace VisionFocus
                 System.Diagnostics.Debug.WriteLine($"Error playing sound: {ex.Message}");
             }
 #else
-            // Implementation for other platforms (if needed)
             System.Diagnostics.Debug.WriteLine($"Playing sound: {soundType} at volume {volume}");
 #endif
+        }
+
+        /// <summary>
+        /// Play alert using polymorphic strategy 
+        /// This method accepts the base class and calls the overridden Play() method
+        /// </summary>
+        public static void PlaySound(Services.AlertStrategyBase alertStrategy)
+        {
+            try
+            {
+                alertStrategy.Play(); // Polymorphic call - runtime binding
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error playing sound: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Get alert strategy from sound type 
+        /// Demonstrates polymorphism - returns base class but creates derived instances
+        /// </summary>
+        public static Services.AlertStrategyBase CreateAlertStrategy(AlertSoundType soundType)
+        {
+            return soundType switch
+            {
+                AlertSoundType.Beep => new Services.BeepAlert(),
+                AlertSoundType.Asterisk => new Services.AsteriskAlert(),
+                AlertSoundType.Exclamation => new Services.ExclamationAlert(),
+                AlertSoundType.Hand => new Services.HandAlert(),
+                AlertSoundType.Question => new Services.QuestionAlert(),
+                _ => new Services.BeepAlert()
+            };
         }
 
         /// <summary>
@@ -95,6 +127,14 @@ namespace VisionFocus
         {
             var soundType = GetSoundTypeFromIndex(soundIndex);
             PlaySound(soundType, volume);
+        }
+
+        /// <summary>
+        /// Play sample sound using polymorphic strategy 
+        /// </summary>
+        public static void PlaySampleSound(Services.AlertStrategyBase alertStrategy)
+        {
+            PlaySound(alertStrategy);
         }
     }
 }

@@ -5,13 +5,14 @@ namespace VisionFocus
 {
     /// <summary>
     /// Camera Page - UI event handling and service coordination with session tracking
+    /// Demonstrates polymorphism through alert strategy pattern
     /// </summary>
     public partial class CameraPage : ContentPage
     {
-        // Services
-        private CameraService? _cameraService;
+        // Services (Using interface types - demonstrates interface usage)
         private EyeMonitoringService? _monitoringService;
-        private SessionTimerService? _timerService;
+        private ICameraService? _cameraService;
+        private ITimerService? _timerService;
 
         // Session tracking
         private DateTime _sessionStartDate;
@@ -39,7 +40,7 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Load subjects list
+        /// Load subjects list from settings
         /// </summary>
         private void LoadSubjects()
         {
@@ -61,7 +62,7 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Initialize session tracking
+        /// Initialize session tracking data structures
         /// </summary>
         private void InitializeSessionTracking(int durationMinutes)
         {
@@ -95,7 +96,7 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Save session data to files
+        /// Save session data to CSV files
         /// </summary>
         private void SaveSessionData()
         {
@@ -145,6 +146,7 @@ namespace VisionFocus
 
         /// <summary>
         /// Initialize camera and services
+        /// Demonstrates polymorphism: Creates alert strategy based on settings
         /// </summary>
         private async Task InitializeServicesAsync()
         {
@@ -155,15 +157,24 @@ namespace VisionFocus
                 // Initialize session tracking
                 InitializeSessionTracking(settings.SessionDurationMinutes);
 
-                // Initialize camera service
+                // Initialize camera service (using interface type)
                 _cameraService = new CameraService();
                 _cameraService.FrameCaptured += OnFrameCaptured;
                 _cameraService.ErrorOccurred += OnCameraError;
                 _cameraService.CameraStarted += OnCameraStarted;
                 _cameraService.CameraStopped += OnCameraStopped;
 
-                // Initialize monitoring service
-                _monitoringService = new EyeMonitoringService();
+                // POLYMORPHISM DEMONSTRATION:
+                // Create alert strategy based on settings (Factory Pattern)
+                // Base class type, but creates derived class instances
+                var soundType = AlertSoundService.GetSoundTypeFromIndex(settings.AlertSoundType);
+                AlertStrategyBase alertStrategy = AlertSoundService.CreateAlertStrategy(soundType);
+                alertStrategy.Volume = settings.AlertVolume;
+
+                // Initialize monitoring service with polymorphic alert strategy
+                // The monitoring service will call Play() on the base class,
+                // but the actual implementation from the derived class will execute
+                _monitoringService = new EyeMonitoringService(alertStrategy);
                 _monitoringService.AlertThresholdSeconds = settings.AlertThresholdSeconds;
                 _monitoringService.WarningThresholdSeconds = settings.WarningThresholdSeconds;
                 _monitoringService.LogEntryAdded += OnLogEntryAdded;
@@ -171,7 +182,7 @@ namespace VisionFocus
                 _monitoringService.AlertTriggered += OnAlertTriggered;
                 _monitoringService.WarningTriggered += OnWarningTriggered;
 
-                // Initialize timer service
+                // Initialize timer service (using interface type)
                 _timerService = new SessionTimerService();
                 _timerService.TimeUpdated += OnTimeUpdated;
                 _timerService.SessionCompleted += OnSessionCompleted;
@@ -202,8 +213,9 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Stop all services
+        /// Stop all services and optionally save session data
         /// </summary>
+        /// <param name="saveData">Whether to save session data</param>
         private void StopAllServices(bool saveData = true)
         {
             // Stop monitoring
@@ -235,6 +247,9 @@ namespace VisionFocus
 
         #region Event Handlers - Camera Service
 
+        /// <summary>
+        /// Handle captured frame from camera
+        /// </summary>
         private void OnFrameCaptured(object? sender, byte[] imageBytes)
         {
             MainThread.BeginInvokeOnMainThread(() =>
@@ -243,6 +258,9 @@ namespace VisionFocus
             });
         }
 
+        /// <summary>
+        /// Handle camera errors
+        /// </summary>
         private void OnCameraError(object? sender, string errorMessage)
         {
             MainThread.BeginInvokeOnMainThread(async () =>
@@ -251,11 +269,17 @@ namespace VisionFocus
             });
         }
 
+        /// <summary>
+        /// Handle camera started event
+        /// </summary>
         private void OnCameraStarted(object? sender, EventArgs e)
         {
             // Additional processing if needed
         }
 
+        /// <summary>
+        /// Handle camera stopped event
+        /// </summary>
         private void OnCameraStopped(object? sender, EventArgs e)
         {
             // Additional processing if needed
@@ -265,6 +289,9 @@ namespace VisionFocus
 
         #region Event Handlers - Monitoring Service
 
+        /// <summary>
+        /// Handle new log entry from monitoring service
+        /// </summary>
         private void OnLogEntryAdded(object? sender, LogEntry entry)
         {
             MainThread.BeginInvokeOnMainThread(() =>
@@ -285,6 +312,7 @@ namespace VisionFocus
                     await LogScrollView.ScrollToAsync(label, ScrollToPosition.End, true);
                 });
 
+                // Limit log entries to prevent memory issues
                 if (LogContainer.Children.Count > 100)
                 {
                     LogContainer.Children.RemoveAt(0);
@@ -292,17 +320,26 @@ namespace VisionFocus
             });
         }
 
+        /// <summary>
+        /// Handle eye state change
+        /// </summary>
         private void OnEyeStateChanged(object? sender, EyeState eyeState)
         {
             // Additional processing if needed
         }
 
+        /// <summary>
+        /// Handle alert triggered event
+        /// </summary>
         private void OnAlertTriggered(object? sender, EventArgs e)
         {
             // Record alert for current minute
             RecordAlert();
         }
 
+        /// <summary>
+        /// Handle warning triggered event
+        /// </summary>
         private void OnWarningTriggered(object? sender, EventArgs e)
         {
             // Additional processing if needed
@@ -312,6 +349,9 @@ namespace VisionFocus
 
         #region Event Handlers - Timer Service
 
+        /// <summary>
+        /// Handle timer update event
+        /// </summary>
         private void OnTimeUpdated(object? sender, int remainingSeconds)
         {
             MainThread.BeginInvokeOnMainThread(() =>
@@ -335,6 +375,9 @@ namespace VisionFocus
             });
         }
 
+        /// <summary>
+        /// Handle session completed event
+        /// </summary>
         private void OnSessionCompleted(object? sender, EventArgs e)
         {
             StopAllServices(saveData: true);
@@ -351,6 +394,9 @@ namespace VisionFocus
 
         #region UI Event Handlers
 
+        /// <summary>
+        /// Handle back button click
+        /// </summary>
         private async void OnBackClicked(object sender, EventArgs e)
         {
             bool isRunning = ControlButtons.IsVisible;
@@ -372,11 +418,17 @@ namespace VisionFocus
             await Shell.Current.GoToAsync("..");
         }
 
+        /// <summary>
+        /// Handle start button click
+        /// </summary>
         private async void OnStartClicked(object sender, EventArgs e)
         {
             await InitializeServicesAsync();
         }
 
+        /// <summary>
+        /// Handle pause/resume button click
+        /// </summary>
         private void OnPauseClicked(object sender, EventArgs e)
         {
             _timerService?.TogglePause();
@@ -396,6 +448,9 @@ namespace VisionFocus
             }
         }
 
+        /// <summary>
+        /// Handle stop button click
+        /// </summary>
         private async void OnStopClicked(object sender, EventArgs e)
         {
             bool answer = await DisplayAlert(
@@ -414,6 +469,9 @@ namespace VisionFocus
             }
         }
 
+        /// <summary>
+        /// Handle subject selection change
+        /// </summary>
         private void OnSubjectChanged(object sender, EventArgs e)
         {
             if (SubjectPicker.SelectedIndex >= 0)
@@ -427,6 +485,11 @@ namespace VisionFocus
 
         #region Helper Methods
 
+        /// <summary>
+        /// Get color for log level
+        /// </summary>
+        /// <param name="level">Log level</param>
+        /// <returns>Color for the log level</returns>
         private Color GetLogColor(LogLevel level)
         {
             var isDark = Application.Current?.RequestedTheme == AppTheme.Dark;
@@ -446,6 +509,9 @@ namespace VisionFocus
 
         #region Lifecycle
 
+        /// <summary>
+        /// Handle page disappearing
+        /// </summary>
         protected override void OnDisappearing()
         {
             base.OnDisappearing();
@@ -456,6 +522,7 @@ namespace VisionFocus
                 StopAllServices(saveData: false);
             }
 
+            // Dispose services
             _cameraService?.Dispose();
             _monitoringService?.Dispose();
             _timerService?.Dispose();

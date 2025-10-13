@@ -1,67 +1,63 @@
-using System.Diagnostics;
 using VisionFocus.Utilities;
+using System.Diagnostics;
 
 namespace VisionFocus.Services
 {
+    /// <summary>
+    /// Log levels
+    /// </summary>
+    public enum LogLevel
+    {
+        Info,
+        Success,
+        Warning,
+        Error,
+        Alert
+    }
+
+    /// <summary>
+    /// Log entry model
+    /// </summary>
+    public class LogEntry
+    {
+        public DateTime Timestamp { get; set; }
+        public LogLevel Level { get; set; }
+        public string Message { get; set; } = string.Empty;
+
+        public string FormattedMessage =>
+            $"[{Timestamp:HH:mm:ss}] {Level}: {Message}";
+    }
+
     /// <summary>
     /// Eye state enumeration
     /// </summary>
     public enum EyeState
     {
-        Open,      // Eyes are open
-        Closed,    // Eyes are closed
-        Unknown    // Cannot determine
+        Open,
+        Closed,
+        Unknown
     }
 
     /// <summary>
-    /// Log level enumeration
-    /// </summary>
-    public enum LogLevel
-    {
-        Success,   // Success (green)
-        Info,      // Information (default)
-        Warning,   // Warning (orange)
-        Error,     // Error (red)
-        Alert      // Alert (red, critical)
-    }
-
-    /// <summary>
-    /// Log entry class
-    /// </summary>
-    public class LogEntry
-    {
-        public DateTime Timestamp { get; set; }
-        public string Message { get; set; } = string.Empty;
-        public LogLevel Level { get; set; }
-
-        public string FormattedMessage => $"[{Timestamp:HH:mm:ss}] {Message}";
-    }
-
-    /// <summary>
-    /// Service responsible for eye monitoring and alert management
+    /// Service for monitoring eye state and triggering alerts
+    /// Demonstrates polymorphism usage with AlertStrategyBase
     /// </summary>
     public class EyeMonitoringService : IDisposable
     {
-        private const double DEFAULT_ALERT_THRESHOLD = 5.0;  // Alert after 5 seconds
-        private const double DEFAULT_WARNING_THRESHOLD = 3.0; // Warning after 3 seconds
-        private const int MONITORING_INTERVAL_MS = 1000;      // Check every 1 second
-        private const string DEFAULT_IMAGE_FILENAME = "RealtimePic.jpg";
-
-        private bool _isMonitoring = false;
+        private System.Timers.Timer? _checkTimer;
+        private DateTime _eyesClosedStartTime;
+        private bool _eyesClosed = false;
+        private bool _warningTriggered = false;
+        private bool _alertTriggered = false;
         private bool _isPaused = false;
-        private CancellationTokenSource? _cancellationTokenSource;
-        private DateTime? _eyesClosedStartTime = null;
-        private double _consecutiveClosedDuration = 0;
+
+        // Polymorphic alert strategy (Demonstrates Polymorphism)
+        private AlertStrategyBase? _alertStrategy;
 
         // Settings
-        public double AlertThresholdSeconds { get; set; } = DEFAULT_ALERT_THRESHOLD;
-        public double WarningThresholdSeconds { get; set; } = DEFAULT_WARNING_THRESHOLD;
-
-        /// <summary>
-        /// Image filename to use for API calls (default: RealtimePic.jpg)
-        /// 実験用に別のファイル名を指定する場合はこのプロパティを変更してください
-        /// </summary>
-        public string ImageFileName { get; set; } = DEFAULT_IMAGE_FILENAME;
+        public double AlertThresholdSeconds { get; set; } = 5.0;
+        public double WarningThresholdSeconds { get; set; } = 3.0;
+        private const int CHECK_INTERVAL_MS = 500;
 
         // Events
         public event EventHandler<LogEntry>? LogEntryAdded;
@@ -70,31 +66,42 @@ namespace VisionFocus.Services
         public event EventHandler? WarningTriggered;
 
         /// <summary>
+        /// Constructor with optional alert strategy 
+        /// </summary>
+        public EyeMonitoringService(AlertStrategyBase? alertStrategy = null)
+        {
+            // Use provided strategy or create default (Polymorphism)
+            _alertStrategy = alertStrategy ?? AlertSoundService.CreateAlertStrategy(AlertSoundType.Beep);
+        }
+
+        /// <summary>
+        /// Set alert strategy
+        /// </summary>
+        public void SetAlertStrategy(AlertStrategyBase strategy)
+        {
+            _alertStrategy = strategy;
+            AddLog(LogLevel.Info, $"Alert strategy changed to: {strategy.GetDescription()}");
+        }
+
+        /// <summary>
+        /// Set alert strategy by type
+        /// </summary>
+        public void SetAlertStrategy(AlertSoundType soundType)
+        {
+            _alertStrategy = AlertSoundService.CreateAlertStrategy(soundType);
+            AddLog(LogLevel.Info, $"Alert strategy changed to: {soundType}");
+        }
+
+        /// <summary>
         /// Start monitoring
         /// </summary>
         public void StartMonitoring()
         {
-            if (_isMonitoring) return;
+            _checkTimer = new System.Timers.Timer(CHECK_INTERVAL_MS);
+            _checkTimer.Elapsed += async (s, e) => await CheckEyeStateAsync();
+            _checkTimer.Start();
 
-            try
-            {
-                _isMonitoring = true;
-                _isPaused = false;
-                _cancellationTokenSource = new CancellationTokenSource();
-
-                // Initialize tracking variables
-                _eyesClosedStartTime = null;
-                _consecutiveClosedDuration = 0;
-
-                AddLog($"?? Monitoring started (using: {ImageFileName})", LogLevel.Success);
-
-                // Start monitoring loop
-                _ = Task.Run(() => MonitoringLoopAsync(_cancellationTokenSource.Token));
-            }
-            catch (Exception ex)
-            {
-                AddLog($"? Monitoring start error: {ex.Message}", LogLevel.Error);
-            }
+            AddLog(LogLevel.Success, "??? Monitoring started");
         }
 
         /// <summary>
@@ -102,250 +109,134 @@ namespace VisionFocus.Services
         /// </summary>
         public void StopMonitoring()
         {
-            if (!_isMonitoring) return;
+            _checkTimer?.Stop();
+            _checkTimer?.Dispose();
+            _checkTimer = null;
 
-            _isMonitoring = false;
-            _cancellationTokenSource?.Cancel();
-
-            AddLog("?? Monitoring stopped", LogLevel.Info);
+            AddLog(LogLevel.Info, "Monitoring stopped");
         }
 
         /// <summary>
-        /// Pause/Resume monitoring
+        /// Toggle pause
         /// </summary>
         public void TogglePause()
         {
             _isPaused = !_isPaused;
+            AddLog(LogLevel.Info, _isPaused ? "?? Monitoring paused" : "?? Monitoring resumed");
+        }
 
-            if (_isPaused)
+        /// <summary>
+        /// Check eye state from image
+        /// </summary>
+        private async Task CheckEyeStateAsync()
+        {
+            if (_isPaused) return;
+
+            try
             {
-                AddLog("?? Monitoring paused", LogLevel.Info);
+                string imagePath = ImageHelper.GetImagePath("RealtimePic.jpg");
+                if (!File.Exists(imagePath)) return;
+
+                // Call Roboflow API
+                string jsonResponse = await RoboflowService.InferImageAsync(imagePath);
+                bool eyesOpen = ParseEyeState(jsonResponse);
+
+                ProcessEyeState(eyesOpen);
             }
-            else
+            catch (Exception ex)
             {
-                AddLog("?? Monitoring resumed", LogLevel.Info);
-                // Reset counter during pause
-                _eyesClosedStartTime = null;
-                _consecutiveClosedDuration = 0;
+                Debug.WriteLine($"Monitoring error: {ex.Message}");
             }
         }
 
         /// <summary>
-        /// Monitoring loop
+        /// Parse Roboflow response
         /// </summary>
-        private async Task MonitoringLoopAsync(CancellationToken cancellationToken)
+        private bool ParseEyeState(string jsonResponse)
         {
-            while (_isMonitoring && !cancellationToken.IsCancellationRequested)
+            try
             {
-                try
+                if (jsonResponse.Contains("\"class\":\"Open\"") ||
+                    jsonResponse.Contains("\"class\":\"open\""))
                 {
-                    // Skip during pause
-                    if (_isPaused)
-                    {
-                        await Task.Delay(MONITORING_INTERVAL_MS, cancellationToken);
-                        continue;
-                    }
-
-                    // Get image path using specified filename
-                    string imagePath = ImageHelper.GetImagePath(ImageFileName);
-                    if (!File.Exists(imagePath))
-                    {
-                        AddLog($"?? Image not found: {ImageFileName}", LogLevel.Warning);
-                        await Task.Delay(MONITORING_INTERVAL_MS, cancellationToken);
-                        continue;
-                    }
-
-                    // Record API call start time
-                    var startTime = DateTime.Now;
-
-                    AddLog("?? Analyzing image...", LogLevel.Info);
-
-                    // Call Roboflow API
-                    string jsonResponse = await RoboflowService.InferImageAsync(imagePath);
-
-                    // Record API call end time
-                    var endTime = DateTime.Now;
-                    var responseTime = (endTime - startTime).TotalMilliseconds;
-
-                    // Parse response
-                    string parsedResult = RoboflowService.ParseResponse(jsonResponse);
-
-                    // Determine eye state
-                    EyeState eyeState = DetermineEyeState(parsedResult);
-
-                    AddLog($"? Response received ({responseTime:F0}ms)", LogLevel.Info);
-                    ProcessEyeState(eyeState, parsedResult);
-
-                    Debug.WriteLine($"API Response: {jsonResponse}");
+                    return true;
                 }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    AddLog($"? Error: {ex.Message}", LogLevel.Error);
-                    Debug.WriteLine($"Monitoring error: {ex}");
-                }
-
-                // Wait before next check
-                try
-                {
-                    await Task.Delay(MONITORING_INTERVAL_MS, cancellationToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
+                return false;
+            }
+            catch
+            {
+                return true; // Default to eyes open on error
             }
         }
 
         /// <summary>
-        /// Determine eye state from API response
+        /// Process eye state and trigger alerts
         /// </summary>
-        private EyeState DetermineEyeState(string parsedResult)
+        private void ProcessEyeState(bool eyesOpen)
         {
-            if (string.IsNullOrWhiteSpace(parsedResult))
-                return EyeState.Unknown;
-
-            // Check for "No detection found"
-            if (parsedResult.Contains("No detection found") ||
-                parsedResult.Contains("no detection"))
+            if (!eyesOpen)
             {
-                return EyeState.Unknown;
-            }
-
-            // Check if eyes are closed
-            if (parsedResult.Contains("eyes_closed", StringComparison.OrdinalIgnoreCase) ||
-                parsedResult.Contains("closed", StringComparison.OrdinalIgnoreCase))
-            {
-                return EyeState.Closed;
-            }
-
-            // Check if eyes are open
-            if (parsedResult.Contains("eyes_open", StringComparison.OrdinalIgnoreCase) ||
-                parsedResult.Contains("open", StringComparison.OrdinalIgnoreCase))
-            {
-                return EyeState.Open;
-            }
-
-            return EyeState.Unknown;
-        }
-
-        /// <summary>
-        /// Process eye state and trigger alerts if needed
-        /// </summary>
-        private void ProcessEyeState(EyeState eyeState, string detectionDetails)
-        {
-            var now = DateTime.Now;
-
-            // Fire event
-            EyeStateChanged?.Invoke(this, eyeState);
-
-            switch (eyeState)
-            {
-                case EyeState.Closed:
-                    HandleClosedEyes(now);
-                    break;
-
-                case EyeState.Open:
-                    HandleOpenEyes(now);
-                    break;
-
-                case EyeState.Unknown:
-                    HandleUnknownState();
-                    break;
-            }
-        }
-
-        /// <summary>
-        /// Handle closed eyes case
-        /// </summary>
-        private void HandleClosedEyes(DateTime now)
-        {
-            if (_eyesClosedStartTime == null)
-            {
-                // First detection of closed eyes
-                _eyesClosedStartTime = now;
-                _consecutiveClosedDuration = 0;
-                AddLog("?? Eyes are closed", LogLevel.Warning);
-            }
-            else
-            {
-                // Eyes continuously closed
-                _consecutiveClosedDuration = (now - _eyesClosedStartTime.Value).TotalSeconds;
-
-                if (_consecutiveClosedDuration >= AlertThresholdSeconds)
+                if (!_eyesClosed)
                 {
-                    // Closed for 5+ seconds - ALERT
-                    AddLog($"?? [ALERT] Eyes closed for {_consecutiveClosedDuration:F1}s!", LogLevel.Alert);
-                    AlertTriggered?.Invoke(this, EventArgs.Empty);
+                    // Eyes just closed
+                    _eyesClosedStartTime = DateTime.Now;
+                    _eyesClosed = true;
+                    _warningTriggered = false;
+                    _alertTriggered = false;
 
-                    // Play sound
-                    AlertSoundService.PlaySound(AlertSoundType.Exclamation);
-                }
-                else if (_consecutiveClosedDuration >= WarningThresholdSeconds)
-                {
-                    // Closed for 3+ seconds - WARNING
-                    AddLog($"?? [WARNING] Eyes closed for {_consecutiveClosedDuration:F1}s", LogLevel.Warning);
-                    WarningTriggered?.Invoke(this, EventArgs.Empty);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Handle open eyes case
-        /// </summary>
-        private void HandleOpenEyes(DateTime now)
-        {
-            if (_eyesClosedStartTime != null)
-            {
-                // Eyes opened, reset closed duration
-                var closedDuration = (now - _eyesClosedStartTime.Value).TotalSeconds;
-
-                if (closedDuration >= AlertThresholdSeconds)
-                {
-                    AddLog($"?? Eyes opened (were closed for {closedDuration:F1}s)", LogLevel.Success);
-                }
-                else if (closedDuration >= WarningThresholdSeconds)
-                {
-                    AddLog($"?? Eyes opened (were closed for {closedDuration:F1}s)", LogLevel.Info);
+                    EyeStateChanged?.Invoke(this, EyeState.Closed);
+                    AddLog(LogLevel.Warning, "???? Eyes closed detected");
                 }
                 else
                 {
-                    AddLog("?? Eyes opened", LogLevel.Success);
-                }
+                    // Eyes still closed - check duration
+                    double closedDuration = (DateTime.Now - _eyesClosedStartTime).TotalSeconds;
 
-                _eyesClosedStartTime = null;
-                _consecutiveClosedDuration = 0;
+                    // Warning threshold
+                    if (!_warningTriggered && closedDuration >= WarningThresholdSeconds)
+                    {
+                        _warningTriggered = true;
+                        WarningTriggered?.Invoke(this, EventArgs.Empty);
+                        AddLog(LogLevel.Warning, $"?? Eyes closed for {closedDuration:F1}s");
+                    }
+
+                    // Alert threshold - USES POLYMORPHISM
+                    if (!_alertTriggered && closedDuration >= AlertThresholdSeconds)
+                    {
+                        _alertTriggered = true;
+                        AlertTriggered?.Invoke(this, EventArgs.Empty);
+
+                        // Polymorphic call - runtime determines which Play() method to execute
+                        _alertStrategy?.Play();
+
+                        AddLog(LogLevel.Alert, $"?? ALERT! Eyes closed for {closedDuration:F1}s");
+                    }
+                }
             }
             else
             {
-                AddLog("?? Eyes are open", LogLevel.Success);
-            }
-        }
+                if (_eyesClosed)
+                {
+                    // Eyes opened again
+                    double closedDuration = (DateTime.Now - _eyesClosedStartTime).TotalSeconds;
+                    _eyesClosed = false;
 
-        /// <summary>
-        /// Handle unknown state case
-        /// </summary>
-        private void HandleUnknownState()
-        {
-            AddLog("? Could not detect eye state", LogLevel.Warning);
-            // Reset counter when detection fails
-            _eyesClosedStartTime = null;
-            _consecutiveClosedDuration = 0;
+                    EyeStateChanged?.Invoke(this, EyeState.Open);
+                    AddLog(LogLevel.Success, $"???? Eyes opened (was closed for {closedDuration:F1}s)");
+                }
+            }
         }
 
         /// <summary>
         /// Add log entry
         /// </summary>
-        private void AddLog(string message, LogLevel level)
+        private void AddLog(LogLevel level, string message)
         {
             var entry = new LogEntry
             {
                 Timestamp = DateTime.Now,
-                Message = message,
-                Level = level
+                Level = level,
+                Message = message
             };
 
             LogEntryAdded?.Invoke(this, entry);
@@ -354,7 +245,6 @@ namespace VisionFocus.Services
         public void Dispose()
         {
             StopMonitoring();
-            _cancellationTokenSource?.Dispose();
         }
     }
 }

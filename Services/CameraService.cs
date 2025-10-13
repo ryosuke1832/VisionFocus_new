@@ -15,7 +15,7 @@ namespace VisionFocus.Services
     /// <summary>
     /// Service responsible for camera capture and frame management
     /// </summary>
-    public class CameraService : IDisposable
+    public class CameraService : ICameraService
     {
 #if WINDOWS
         private MediaCapture? _mediaCapture;

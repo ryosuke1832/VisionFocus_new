@@ -1,7 +1,12 @@
 using System.Collections.ObjectModel;
+using VisionFocus.Services;
 
 namespace VisionFocus
 {
+    /// <summary>
+    /// Settings Page - User preferences management
+    /// Demonstrates polymorphism through alert strategy testing
+    /// </summary>
     public partial class SettingsPage : ContentPage
     {
         private SettingsModel _currentSettings;
@@ -18,7 +23,7 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Load settings and reflect them in the UI
+        /// Load settings from file and reflect them in the UI
         /// </summary>
         private void LoadSettings()
         {
@@ -56,7 +61,7 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Initialize sound picker
+        /// Initialize sound picker with available sound types
         /// </summary>
         private void InitializeSoundPicker()
         {
@@ -70,7 +75,7 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Session duration slider value changed event
+        /// Handle session duration slider value change
         /// </summary>
         private void OnSessionDurationChanged(object sender, ValueChangedEventArgs e)
         {
@@ -80,7 +85,7 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Warning threshold slider value changed event
+        /// Handle warning threshold slider value change
         /// </summary>
         private void OnWarningThresholdChanged(object sender, ValueChangedEventArgs e)
         {
@@ -88,7 +93,7 @@ namespace VisionFocus
             WarningThresholdLabel.Text = value.ToString("F1");
             _currentSettings.WarningThresholdSeconds = value;
 
-            // Adjust so that warning time is not greater than alert time
+            // Ensure warning threshold is less than alert threshold
             if (value >= AlertThresholdSlider.Value)
             {
                 AlertThresholdSlider.Value = value + 1;
@@ -96,7 +101,7 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Alert threshold slider value changed event
+        /// Handle alert threshold slider value change
         /// </summary>
         private void OnAlertThresholdChanged(object sender, ValueChangedEventArgs e)
         {
@@ -104,7 +109,7 @@ namespace VisionFocus
             AlertThresholdLabel.Text = value.ToString("F1");
             _currentSettings.AlertThresholdSeconds = value;
 
-            // Adjust so that alert time is not less than warning time
+            // Ensure alert threshold is greater than warning threshold
             if (value <= WarningThresholdSlider.Value)
             {
                 WarningThresholdSlider.Value = value - 1;
@@ -112,7 +117,7 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Volume slider value changed event
+        /// Handle volume slider value change
         /// </summary>
         private void OnVolumeChanged(object sender, ValueChangedEventArgs e)
         {
@@ -122,7 +127,7 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Sound type changed event
+        /// Handle sound type selection change
         /// </summary>
         private void OnSoundTypeChanged(object sender, EventArgs e)
         {
@@ -133,7 +138,8 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Test sound button click event
+        /// Handle test sound button click
+        /// DEMONSTRATES POLYMORPHISM: Uses base class type but executes derived class methods
         /// </summary>
         private void OnTestSoundClicked(object sender, EventArgs e)
         {
@@ -142,7 +148,32 @@ namespace VisionFocus
                 int soundIndex = SoundTypePicker.SelectedIndex;
                 double volume = VolumeSlider.Value;
 
-                AlertSoundService.PlaySampleSound(soundIndex, volume);
+                // POLYMORPHISM DEMONSTRATION:
+                // Step 1: Get sound type from index
+                var soundType = AlertSoundService.GetSoundTypeFromIndex(soundIndex);
+
+                // Step 2: Create alert strategy (Factory Pattern)
+                // Returns base class type, but creates derived class instance
+                AlertStrategyBase alertStrategy = AlertSoundService.CreateAlertStrategy(soundType);
+
+                // Step 3: Set volume property
+                alertStrategy.Volume = volume;
+
+                // Step 4: Polymorphic call - Play() method
+                // Although alertStrategy is declared as base class type,
+                // the actual Play() method from the derived class will be executed
+                // This is runtime polymorphism (dynamic binding)
+                AlertSoundService.PlaySound(alertStrategy);
+
+                // Step 5: Polymorphic call - GetDescription() method
+                // Similarly, GetDescription() from the derived class is called
+                string description = alertStrategy.GetDescription();
+                System.Diagnostics.Debug.WriteLine(
+                    $"Playing: {description} at {volume * 100:F0}%"
+                );
+
+                // Alternative: Using method overloading (also demonstrates polymorphism)
+                // AlertSoundService.PlaySampleSound(alertStrategy);
             }
             catch (Exception ex)
             {
@@ -151,7 +182,7 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Add subject button click event
+        /// Handle add subject button click
         /// </summary>
         private void OnAddSubjectClicked(object sender, EventArgs e)
         {
@@ -172,12 +203,12 @@ namespace VisionFocus
             _subjects.Add(newSubject);
             NewSubjectEntry.Text = string.Empty;
 
-            // Add to settings model as well
+            // Update settings model
             _currentSettings.Subjects = _subjects.ToList();
         }
 
         /// <summary>
-        /// Delete subject button click event
+        /// Handle delete subject button click
         /// </summary>
         private async void OnDeleteSubjectClicked(object sender, EventArgs e)
         {
@@ -196,7 +227,7 @@ namespace VisionFocus
                     {
                         _subjects.Remove(subject);
 
-                        // Remove from settings model as well
+                        // Update settings model
                         _currentSettings.Subjects = _subjects.ToList();
                     }
                 }
@@ -208,7 +239,7 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Save settings button click event
+        /// Handle save settings button click
         /// </summary>
         private async void OnSaveClicked(object sender, EventArgs e)
         {
@@ -217,7 +248,7 @@ namespace VisionFocus
                 // Update subjects list
                 _currentSettings.Subjects = _subjects.ToList();
 
-                // Save settings
+                // Save settings to file
                 SettingsService.SaveSettings(_currentSettings);
 
                 await DisplayAlert("Success", "Settings saved successfully!", "OK");
@@ -229,7 +260,7 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Reset button click event
+        /// Handle reset button click
         /// </summary>
         private async void OnResetClicked(object sender, EventArgs e)
         {
@@ -249,11 +280,12 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Back button click event
+        /// Handle back button click
+        /// Check for unsaved changes before navigating away
         /// </summary>
         private async void OnBackClicked(object sender, EventArgs e)
         {
-            // Check if there are unsaved changes
+            // Build current settings from UI state
             var currentFromUI = new SettingsModel
             {
                 SessionDurationMinutes = (int)SessionDurationSlider.Value,
@@ -266,7 +298,7 @@ namespace VisionFocus
 
             var saved = SettingsService.LoadSettings();
 
-            // Simple change check
+            // Check for changes
             bool hasChanges = currentFromUI.SessionDurationMinutes != saved.SessionDurationMinutes ||
                             currentFromUI.AlertThresholdSeconds != saved.AlertThresholdSeconds ||
                             currentFromUI.WarningThresholdSeconds != saved.WarningThresholdSeconds ||

@@ -58,10 +58,9 @@
 	</ItemGroup>
 	<ItemGroup>
 		<Folder Include="Resources\Raw\CapturedImages\" />
-		<Folder Include="Resources\Data\" />
 	</ItemGroup>
 	<ItemGroup>
-	  <MauiAsset Include="Resources\Data\.gitkeep">
+	  <MauiAsset Include="Resources\Data\EachData\.gitkeep">
 	    <LogicalName>%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
 	  </MauiAsset>
 	</ItemGroup>
