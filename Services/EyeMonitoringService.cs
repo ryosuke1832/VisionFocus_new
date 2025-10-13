@@ -46,6 +46,7 @@ namespace VisionFocus.Services
     {
         private System.Timers.Timer? _checkTimer;
         private DateTime _eyesClosedStartTime;
+        private DateTime _lastAlertTime = DateTime.MinValue;
         private bool _eyesClosed = false;
         private bool _warningTriggered = false;
         private bool _alertTriggered = false;
@@ -57,6 +58,7 @@ namespace VisionFocus.Services
         // Settings
         public double AlertThresholdSeconds { get; set; } = 5.0;
         public double WarningThresholdSeconds { get; set; } = 3.0;
+        public double AlertRepeatIntervalSeconds { get; set; } = 2.0; // Repeat alert every 2 seconds
         private const int CHECK_INTERVAL_MS = 500;
 
         // Events
@@ -66,7 +68,7 @@ namespace VisionFocus.Services
         public event EventHandler? WarningTriggered;
 
         /// <summary>
-        /// Constructor with optional alert strategy 
+        /// Constructor with optional alert strategy (Dependency Injection)
         /// </summary>
         public EyeMonitoringService(AlertStrategyBase? alertStrategy = null)
         {
@@ -75,7 +77,7 @@ namespace VisionFocus.Services
         }
 
         /// <summary>
-        /// Set alert strategy
+        /// Set alert strategy (Strategy Pattern - Polymorphism)
         /// </summary>
         public void SetAlertStrategy(AlertStrategyBase strategy)
         {
@@ -171,6 +173,7 @@ namespace VisionFocus.Services
 
         /// <summary>
         /// Process eye state and trigger alerts
+        /// Fixed: Continuously plays alert sound while eyes are closed beyond threshold
         /// </summary>
         private void ProcessEyeState(bool eyesOpen)
         {
@@ -200,16 +203,31 @@ namespace VisionFocus.Services
                         AddLog(LogLevel.Warning, $"?? Eyes closed for {closedDuration:F1}s");
                     }
 
-                    // Alert threshold - USES POLYMORPHISM
-                    if (!_alertTriggered && closedDuration >= AlertThresholdSeconds)
+                    // Alert threshold - INTERVAL-BASED ALERT (every 2 seconds)
+                    if (closedDuration >= AlertThresholdSeconds)
                     {
-                        _alertTriggered = true;
-                        AlertTriggered?.Invoke(this, EventArgs.Empty);
+                        // Check if enough time has passed since last alert
+                        double timeSinceLastAlert = (DateTime.Now - _lastAlertTime).TotalSeconds;
 
-                        // Polymorphic call - runtime determines which Play() method to execute
-                        _alertStrategy?.Play();
+                        // Trigger on first occurrence or after repeat interval
+                        if (!_alertTriggered || timeSinceLastAlert >= AlertRepeatIntervalSeconds)
+                        {
+                            // Trigger event only once per closed-eye session
+                            if (!_alertTriggered)
+                            {
+                                _alertTriggered = true;
+                                AlertTriggered?.Invoke(this, EventArgs.Empty);
+                            }
 
-                        AddLog(LogLevel.Alert, $"?? ALERT! Eyes closed for {closedDuration:F1}s");
+                            // POLYMORPHIC CALL - Play alert at intervals
+                            _alertStrategy?.Play();
+
+                            // Update last alert time
+                            _lastAlertTime = DateTime.Now;
+
+                            // Log the alert
+                            AddLog(LogLevel.Alert, $"?? ALERT! Eyes closed for {closedDuration:F1}s");
+                        }
                     }
                 }
             }
@@ -217,9 +235,12 @@ namespace VisionFocus.Services
             {
                 if (_eyesClosed)
                 {
-                    // Eyes opened again
+                    // Eyes opened again - reset all flags
                     double closedDuration = (DateTime.Now - _eyesClosedStartTime).TotalSeconds;
                     _eyesClosed = false;
+                    _warningTriggered = false;
+                    _alertTriggered = false;
+                    _lastAlertTime = DateTime.MinValue; // Reset alert timer
 
                     EyeStateChanged?.Invoke(this, EyeState.Open);
                     AddLog(LogLevel.Success, $"???? Eyes opened (was closed for {closedDuration:F1}s)");
