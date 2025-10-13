@@ -1,6 +1,4 @@
-﻿using Windows.UI.ApplicationSettings;
-
-namespace VisionFocus
+﻿namespace VisionFocus
 {
     public partial class AppShell : Shell
     {

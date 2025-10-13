@@ -1,5 +1,4 @@
-﻿using System.Net;
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 
 namespace VisionFocus.Services
@@ -9,6 +8,8 @@ namespace VisionFocus.Services
     /// </summary>
     public class RoboflowService
     {
+        private static readonly HttpClient _httpClient = new HttpClient();
+
         /// <summary>
         /// Sends an image to Roboflow API for inference
         /// </summary>
@@ -21,38 +22,22 @@ namespace VisionFocus.Services
                 // Read image file and convert to base64
                 byte[] imageArray = await File.ReadAllBytesAsync(imagePath);
                 string encoded = Convert.ToBase64String(imageArray);
-                byte[] data = Encoding.ASCII.GetBytes(encoded);
 
-                // Configure Service Point Manager for HTTPS
-                ServicePointManager.Expect100Continue = true;
-                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+                // Create HTTP content
+                var content = new StringContent(encoded, Encoding.ASCII, "application/x-www-form-urlencoded");
 
-                // Create HTTP request
-                WebRequest request = WebRequest.Create(ApiConfig.InferenceUrl);
-                request.Method = "POST";
-                request.ContentType = "application/x-www-form-urlencoded";
-                request.ContentLength = data.Length;
+                // Send POST request
+                HttpResponseMessage response = await _httpClient.PostAsync(ApiConfig.InferenceUrl, content);
+                response.EnsureSuccessStatusCode();
 
-                // Write image data to request stream
-                using (Stream stream = request.GetRequestStream())
-                {
-                    await stream.WriteAsync(data, 0, data.Length);
-                }
-
-                // Get response from API
-                string responseContent;
-                using (WebResponse response = request.GetResponse())
-                {
-                    using (Stream stream = response.GetResponseStream())
-                    {
-                        using (StreamReader reader = new StreamReader(stream))
-                        {
-                            responseContent = await reader.ReadToEndAsync();
-                        }
-                    }
-                }
+                // Read response content
+                string responseContent = await response.Content.ReadAsStringAsync();
 
                 return responseContent;
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new Exception($"Roboflow API HTTP Error: {ex.Message}", ex);
             }
             catch (Exception ex)
             {

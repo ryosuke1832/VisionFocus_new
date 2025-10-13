@@ -306,7 +306,8 @@ namespace VisionFocus
 
                 LogContainer.Children.Add(label);
 
-                Device.BeginInvokeOnMainThread(async () =>
+
+                Dispatcher.Dispatch(async () =>
                 {
                     await Task.Delay(50);
                     await LogScrollView.ScrollToAsync(label, ScrollToPosition.End, true);
