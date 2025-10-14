@@ -16,32 +16,36 @@
                     WidthRequest="50"
                     HeightRequest="50"
                     Padding="0" />
-
-            <Label Grid.Column="1"
-                   Text="History"
-                   FontSize="28"
-                   FontAttributes="Bold"
-                   VerticalOptions="Center"
-                   HorizontalOptions="Start"
-                   Margin="10,0,0,0" />
         </Grid>
 
-        <!-- Content Area -->
-        <VerticalStackLayout Grid.Row="1"
-                             VerticalOptions="Center"
-                             HorizontalOptions="Center"
-                             Spacing="20">
-            <Label Text="Temporary"
-                   FontSize="32"
-                   FontAttributes="Bold"
-                   HorizontalOptions="Center"
-                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}" />
+        <!-- Table Scroll Area -->
+        <ScrollView Grid.Row="1">
+            <CollectionView x:Name="SessionCollectionView">
+                <CollectionView.Header>
+                    <Grid Padding="10,5" ColumnDefinitions="*,*,*,*,*"
+                          BackgroundColor="{AppThemeBinding Light=#e6e6e6, Dark=#333333}">
+                        <Label Text="Date" FontAttributes="Bold" />
+                        <Label Grid.Column="1" Text="Start Time" FontAttributes="Bold" />
+                        <Label Grid.Column="2" Text="Subject" FontAttributes="Bold" />
+                        <Label Grid.Column="3" Text="Duration (min)" FontAttributes="Bold" />
+                        <Label Grid.Column="4" Text="Alerts" FontAttributes="Bold" />
+                    </Grid>
+                </CollectionView.Header>
 
-            <Label Text="History page is under development"
-                   FontSize="16"
-                   HorizontalOptions="Center"
-                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray500}}" />
-        </VerticalStackLayout>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Padding="10,5" ColumnDefinitions="*,*,*,*,*"
+                              BackgroundColor="{AppThemeBinding Light=#fafafa, Dark=#222222}">
+                            <Label Text="{Binding Date, StringFormat='{0:dd-MM-yyyy}'}" />
+                            <Label Grid.Column="1" Text="{Binding StartTime, StringFormat='{0:hh\\:mm\\:ss}'}" />
+                            <Label Grid.Column="2" Text="{Binding Subject}" />
+                            <Label Grid.Column="3" Text="{Binding SessionDurationMinutes}" />
+                            <Label Grid.Column="4" Text="{Binding TotalAlertCount}" />
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </ScrollView>
     </Grid>
 
 </ContentPage>

@@ -21,7 +21,7 @@
                              VerticalOptions="Center"
                              HorizontalOptions="Center"
                              WidthRequest="300">
-            <Button Text="📷 Sesseion"
+            <Button Text="📷 Session"
                     Clicked="OnCameraClicked"
                     BackgroundColor="#512BD4"
                     TextColor="White"
