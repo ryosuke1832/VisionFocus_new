@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using ScottPlot.Maui;
 
 namespace VisionFocus
 {
