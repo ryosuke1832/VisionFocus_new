@@ -4,47 +4,13 @@ using System.Diagnostics;
 namespace VisionFocus.Services
 {
     /// <summary>
-    /// Log levels
-    /// </summary>
-    public enum LogLevel
-    {
-        Info,
-        Success,
-        Warning,
-        Error,
-        Alert
-    }
-
-    /// <summary>
-    /// Log entry model
-    /// </summary>
-    public class LogEntry
-    {
-        public DateTime Timestamp { get; set; }
-        public LogLevel Level { get; set; }
-        public string Message { get; set; } = string.Empty;
-
-        public string FormattedMessage =>
-            $"[{Timestamp:HH:mm:ss}] {Level}: {Message}";
-    }
-
-    /// <summary>
-    /// Eye state enumeration
-    /// </summary>
-    public enum EyeState
-    {
-        Open,
-        Closed,
-        Unknown
-    }
-
-    /// <summary>
     /// Service for monitoring eye state and triggering alerts
-    /// Demonstrates polymorphism usage with AlertStrategyBase
+    /// Demonstrates polymorphism with AlertStrategyBase
     /// </summary>
     public class EyeMonitoringService : IDisposable
     {
-        private System.Timers.Timer? _checkTimer;
+        private CancellationTokenSource? _cancellationTokenSource;
+        private Task? _monitoringTask;
         private DateTime _eyesClosedStartTime;
         private DateTime _lastAlertTime = DateTime.MinValue;
         private bool _eyesClosed = false;
@@ -52,7 +18,7 @@ namespace VisionFocus.Services
         private bool _alertTriggered = false;
         private bool _isPaused = false;
 
-        // Polymorphic alert strategy (Demonstrates Polymorphism)
+        // Polymorphic alert strategy
         private AlertStrategyBase? _alertStrategy;
 
         // Debug mode settings
@@ -62,8 +28,8 @@ namespace VisionFocus.Services
         // Settings
         public double AlertThresholdSeconds { get; set; } = 5.0;
         public double WarningThresholdSeconds { get; set; } = 3.0;
-        public double AlertRepeatIntervalSeconds { get; set; } = 2.0; // Repeat alert every 2 seconds
-        private const int CHECK_INTERVAL_MS = 500;
+        public double AlertRepeatIntervalSeconds { get; set; } = 2.0;
+        private const int MIN_DELAY_BETWEEN_CHECKS_MS = 100; // Minimum wait time between API calls
 
         // Events
         public event EventHandler<LogEntry>? LogEntryAdded;
@@ -72,11 +38,10 @@ namespace VisionFocus.Services
         public event EventHandler? WarningTriggered;
 
         /// <summary>
-        /// Constructor with optional alert strategy (Dependency Injection)
+        /// Constructor with optional alert strategy
         /// </summary>
         public EyeMonitoringService(AlertStrategyBase? alertStrategy = null)
         {
-            // Use provided strategy or create default (Polymorphism)
             _alertStrategy = alertStrategy ?? AlertSoundService.CreateAlertStrategy(AlertSoundType.Beep);
         }
 
@@ -101,8 +66,6 @@ namespace VisionFocus.Services
         /// <summary>
         /// Set debug mode
         /// </summary>
-        /// <param name="enabled">Enable or disable debug mode</param>
-        /// <param name="debugImageFileName">Debug image file name (Closed.jpg or Open.jpg)</param>
         public void SetDebugMode(bool enabled, string debugImageFileName)
         {
             _isDebugMode = enabled;
@@ -111,21 +74,28 @@ namespace VisionFocus.Services
             if (_isDebugMode)
             {
                 AddLog(LogLevel.Info, $"?? Debug mode enabled: {debugImageFileName}");
+                Debug.WriteLine($"?? Debug mode: ON, File: {debugImageFileName}");
             }
             else
             {
                 AddLog(LogLevel.Info, "?? Debug mode disabled");
+                Debug.WriteLine("?? Debug mode: OFF");
             }
         }
 
         /// <summary>
-        /// Start monitoring
+        /// Start monitoring (loop-based)
         /// </summary>
         public void StartMonitoring()
         {
-            _checkTimer = new System.Timers.Timer(CHECK_INTERVAL_MS);
-            _checkTimer.Elapsed += async (s, e) => await CheckEyeStateAsync();
-            _checkTimer.Start();
+            // Stop if already running
+            if (_monitoringTask != null)
+            {
+                StopMonitoring();
+            }
+
+            _cancellationTokenSource = new CancellationTokenSource();
+            _monitoringTask = Task.Run(() => MonitoringLoopAsync(_cancellationTokenSource.Token));
 
             AddLog(LogLevel.Success, "? Monitoring started");
         }
@@ -135,15 +105,17 @@ namespace VisionFocus.Services
         /// </summary>
         public void StopMonitoring()
         {
-            _checkTimer?.Stop();
-            _checkTimer?.Dispose();
-            _checkTimer = null;
+            _cancellationTokenSource?.Cancel();
+            _monitoringTask?.Wait(TimeSpan.FromSeconds(2));
+            _cancellationTokenSource?.Dispose();
+            _cancellationTokenSource = null;
+            _monitoringTask = null;
 
             AddLog(LogLevel.Info, "Monitoring stopped");
         }
 
         /// <summary>
-        /// Toggle pause
+        /// Toggle pause/resume
         /// </summary>
         public void TogglePause()
         {
@@ -152,17 +124,53 @@ namespace VisionFocus.Services
         }
 
         /// <summary>
+        /// Monitoring loop (continuous API calls)
+        /// </summary>
+        private async Task MonitoringLoopAsync(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    if (!_isPaused)
+                    {
+                        await CheckEyeStateAsync();
+                    }
+
+                    // Minimum wait time between API calls
+                    await Task.Delay(MIN_DELAY_BETWEEN_CHECKS_MS, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Normal exit when cancelled
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Monitoring error: {ex.Message}");
+                    // Continue monitoring even if error occurs
+                    await Task.Delay(1000, cancellationToken);
+                }
+            }
+        }
+
+        /// <summary>
         /// Check eye state from image
         /// </summary>
         private async Task CheckEyeStateAsync()
         {
-            if (_isPaused) return;
-
             try
             {
                 // Select image file based on debug mode
                 string imageFileName = _isDebugMode ? _debugImageFileName : "RealtimePic.jpg";
                 string imagePath = ImageHelper.GetImagePath(imageFileName);
+
+                // ?? Debug: Log the image file name being sent
+                if (_isDebugMode)
+                {
+                    AddLog(LogLevel.Info, $"?? Sending image: {imageFileName}");
+                    Debug.WriteLine($"?? Full path: {imagePath}");
+                }
 
                 if (!File.Exists(imagePath))
                 {
@@ -175,13 +183,28 @@ namespace VisionFocus.Services
 
                 // Call Roboflow API
                 string jsonResponse = await RoboflowService.InferImageAsync(imagePath);
+
+                // ?? Debug: Log entire API response
+                if (_isDebugMode)
+                {
+                    AddLog(LogLevel.Info, $"?? API response: {jsonResponse}");
+                    Debug.WriteLine($"?? Full response: {jsonResponse}");
+                }
+
                 bool eyesOpen = ParseEyeState(jsonResponse);
+
+                // ?? Debug: Log parsing result
+                if (_isDebugMode)
+                {
+                    AddLog(LogLevel.Info, $"?? Parsed result: {(eyesOpen ? "Eyes open" : "Eyes closed")}");
+                }
 
                 ProcessEyeState(eyesOpen);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Monitoring error: {ex.Message}");
+                Debug.WriteLine($"Eye state check error: {ex.Message}");
+                AddLog(LogLevel.Error, $"Error: {ex.Message}");
             }
         }
 
@@ -192,22 +215,60 @@ namespace VisionFocus.Services
         {
             try
             {
-                if (jsonResponse.Contains("\"class\":\"Open\"") ||
-                    jsonResponse.Contains("\"class\":\"open\""))
+                // Convert to lowercase for substring search
+                string lowerResponse = jsonResponse.ToLower();
+
+                // Look for classes containing "open eye" or "open"
+                bool hasOpen = lowerResponse.Contains("\"class\":\"open") ||
+                               lowerResponse.Contains("class\":\"open");
+
+                // Look for classes containing "closed eye" or "closed"
+                bool hasClosed = lowerResponse.Contains("\"class\":\"closed") ||
+                                 lowerResponse.Contains("class\":\"closed");
+
+                // ?? Debug: Log detected classes in detail
+                if (_isDebugMode)
+                {
+                    Debug.WriteLine($"?? 'open' detected: {hasOpen}, 'closed' detected: {hasClosed}");
+
+                    // Extract and display class name
+                    int classIndex = lowerResponse.IndexOf("\"class\":\"");
+                    if (classIndex >= 0)
+                    {
+                        int startIndex = classIndex + 9; // Length of "class":"
+                        int endIndex = lowerResponse.IndexOf("\"", startIndex);
+                        if (endIndex > startIndex)
+                        {
+                            string className = jsonResponse.Substring(startIndex, endIndex - startIndex);
+                            Debug.WriteLine($"   Detected class name: '{className}'");
+                        }
+                    }
+                }
+
+                // If open is detected, eyes are open
+                if (hasOpen)
                 {
                     return true;
                 }
-                return false;
+
+                // If closed is detected, eyes are closed
+                if (hasClosed)
+                {
+                    return false;
+                }
+
+                // Default to eyes open if neither detected
+                return true;
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"Parse error: {ex.Message}");
                 return true; // Default to eyes open on error
             }
         }
 
         /// <summary>
         /// Process eye state and trigger alerts
-        /// Fixed: Continuously plays alert sound while eyes are closed beyond threshold
         /// </summary>
         private void ProcessEyeState(bool eyesOpen)
         {
@@ -222,7 +283,7 @@ namespace VisionFocus.Services
                     _alertTriggered = false;
 
                     EyeStateChanged?.Invoke(this, EyeState.Closed);
-                    AddLog(LogLevel.Warning, "??? Eyes closed detected");
+                    AddLog(LogLevel.Warning, "?? Eyes closed detected");
                 }
                 else
                 {
@@ -240,7 +301,7 @@ namespace VisionFocus.Services
                     // Alert threshold - INTERVAL-BASED ALERT (every 2 seconds)
                     if (closedDuration >= AlertThresholdSeconds)
                     {
-                        // Check if enough time has passed since last alert
+                        // Check time since last alert
                         double timeSinceLastAlert = (DateTime.Now - _lastAlertTime).TotalSeconds;
 
                         // Trigger on first occurrence or after repeat interval
@@ -277,7 +338,7 @@ namespace VisionFocus.Services
                     _lastAlertTime = DateTime.MinValue; // Reset alert timer
 
                     EyeStateChanged?.Invoke(this, EyeState.Open);
-                    AddLog(LogLevel.Success, $"???? Eyes opened (was closed for {closedDuration:F1}s)");
+                    AddLog(LogLevel.Success, $"??? Eyes opened (was closed for {closedDuration:F1}s)");
                 }
             }
         }
@@ -301,5 +362,40 @@ namespace VisionFocus.Services
         {
             StopMonitoring();
         }
+    }
+
+    /// <summary>
+    /// Log levels
+    /// </summary>
+    public enum LogLevel
+    {
+        Info,
+        Success,
+        Warning,
+        Error,
+        Alert
+    }
+
+    /// <summary>
+    /// Log entry model
+    /// </summary>
+    public class LogEntry
+    {
+        public DateTime Timestamp { get; set; }
+        public LogLevel Level { get; set; }
+        public string Message { get; set; } = string.Empty;
+
+        public string FormattedMessage =>
+            $"[{Timestamp:HH:mm:ss}] {Level}: {Message}";
+    }
+
+    /// <summary>
+    /// Eye state enumeration
+    /// </summary>
+    public enum EyeState
+    {
+        Open,
+        Closed,
+        Unknown
     }
 }

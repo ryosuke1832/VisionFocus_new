@@ -499,12 +499,19 @@ namespace VisionFocus
             _isDebugMode = e.Value;
             EyeStateToggleContainer.IsVisible = e.Value;
 
+            System.Diagnostics.Debug.WriteLine($"🔧 デバッグモードトグル: {(_isDebugMode ? "ON" : "OFF")}");
+            System.Diagnostics.Debug.WriteLine($"📁 現在のデバッグファイル: {_debugImageFileName}");
+
+
             if (_monitoringService != null)
             {
                 _monitoringService.SetDebugMode(_isDebugMode, _debugImageFileName);
+                System.Diagnostics.Debug.WriteLine($"✅ MonitoringServiceに反映: SetDebugMode({_isDebugMode}, {_debugImageFileName})");
             }
-
-            System.Diagnostics.Debug.WriteLine($"Debug mode: {(_isDebugMode ? "ON" : "OFF")}");
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("⚠️ MonitoringServiceがまだ初期化されていません");
+            }
         }
 
         /// <summary>

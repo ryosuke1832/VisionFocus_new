@@ -4,14 +4,14 @@ using System.Text.Json;
 namespace VisionFocus.Services
 {
     /// <summary>
-    /// Service class for communicating with Roboflow API
+    /// Service class for communicating with Roboflow API (Enhanced debugging version)
     /// </summary>
     public class RoboflowService
     {
         private static readonly HttpClient _httpClient = new HttpClient();
 
         /// <summary>
-        /// Sends an image to Roboflow API for inference
+        /// Send image to Roboflow API for inference
         /// </summary>
         /// <param name="imagePath">Path to the image file</param>
         /// <returns>JSON response from API</returns>
@@ -19,34 +19,91 @@ namespace VisionFocus.Services
         {
             try
             {
-                // Read image file and convert to base64
+                // 🔍 Debug: Log image path and size to be sent
+                System.Diagnostics.Debug.WriteLine($"📤 API transmission started");
+                System.Diagnostics.Debug.WriteLine($"   File path: {imagePath}");
+
+                if (File.Exists(imagePath))
+                {
+                    var fileInfo = new FileInfo(imagePath);
+                    System.Diagnostics.Debug.WriteLine($"   File size: {fileInfo.Length} bytes");
+                    System.Diagnostics.Debug.WriteLine($"   Last modified: {fileInfo.LastWriteTime}");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"   ❌ File does not exist!");
+                    throw new FileNotFoundException($"Image file not found: {imagePath}");
+                }
+
+                // Read image file and convert to Base64
                 byte[] imageArray = await File.ReadAllBytesAsync(imagePath);
                 string encoded = Convert.ToBase64String(imageArray);
+
+                System.Diagnostics.Debug.WriteLine($"   Base64 encoding complete: {encoded.Length} characters");
 
                 // Create HTTP content
                 var content = new StringContent(encoded, Encoding.ASCII, "application/x-www-form-urlencoded");
 
                 // Send POST request
+                System.Diagnostics.Debug.WriteLine($"   API URL: {ApiConfig.InferenceUrl}");
+                System.Diagnostics.Debug.WriteLine($"   Sending request...");
+
+                var startTime = DateTime.Now;
                 HttpResponseMessage response = await _httpClient.PostAsync(ApiConfig.InferenceUrl, content);
+                var responseTime = (DateTime.Now - startTime).TotalMilliseconds;
+
+                System.Diagnostics.Debug.WriteLine($"   Response time: {responseTime:F0}ms");
+                System.Diagnostics.Debug.WriteLine($"   Status code: {response.StatusCode}");
+
                 response.EnsureSuccessStatusCode();
 
                 // Read response content
                 string responseContent = await response.Content.ReadAsStringAsync();
 
+                // 🔍 Debug: Log entire response
+                System.Diagnostics.Debug.WriteLine($"📥 API Response:");
+                System.Diagnostics.Debug.WriteLine($"   {responseContent}");
+
+                // Format JSON and extract key information
+                try
+                {
+                    using JsonDocument doc = JsonDocument.Parse(responseContent);
+                    JsonElement root = doc.RootElement;
+
+                    if (root.TryGetProperty("predictions", out JsonElement predictions))
+                    {
+                        int count = predictions.GetArrayLength();
+                        System.Diagnostics.Debug.WriteLine($"   Detection count: {count}");
+
+                        foreach (JsonElement prediction in predictions.EnumerateArray())
+                        {
+                            string className = prediction.GetProperty("class").GetString() ?? "Unknown";
+                            double confidence = prediction.GetProperty("confidence").GetDouble();
+                            System.Diagnostics.Debug.WriteLine($"   • Class: {className}, Confidence: {confidence:P2}");
+                        }
+                    }
+                }
+                catch (Exception parseEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"   ⚠️ JSON parse error: {parseEx.Message}");
+                }
+
                 return responseContent;
             }
             catch (HttpRequestException ex)
             {
-                throw new Exception($"Roboflow API HTTP Error: {ex.Message}", ex);
+                System.Diagnostics.Debug.WriteLine($"❌ Roboflow API HTTP error: {ex.Message}");
+                throw new Exception($"Roboflow API HTTP error: {ex.Message}", ex);
             }
             catch (Exception ex)
             {
-                throw new Exception($"Roboflow API Error: {ex.Message}", ex);
+                System.Diagnostics.Debug.WriteLine($"❌ Roboflow API error: {ex.Message}");
+                throw new Exception($"Roboflow API error: {ex.Message}", ex);
             }
         }
 
         /// <summary>
-        /// Parses the Roboflow API response and extracts the detection result
+        /// Parse Roboflow API response and convert to human-readable format
         /// </summary>
         /// <param name="jsonResponse">JSON response from API</param>
         /// <returns>Human-readable result string</returns>
@@ -64,11 +121,11 @@ namespace VisionFocus.Services
 
                     if (predictionCount == 0)
                     {
-                        return "No detection found";
+                        return "No detection";
                     }
 
                     StringBuilder result = new StringBuilder();
-                    result.AppendLine($"Detections found: {predictionCount}\n");
+                    result.AppendLine($"Detection count: {predictionCount}\n");
 
                     // Parse each prediction
                     int index = 1;
@@ -104,7 +161,7 @@ namespace VisionFocus.Services
             }
             catch (Exception ex)
             {
-                return $"Error parsing response: {ex.Message}";
+                return $"Response parse error: {ex.Message}";
             }
         }
     }
