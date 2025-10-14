@@ -21,32 +21,33 @@
 
         <!-- Content Area -->
         <ScrollView Grid.Row="1">
-            <VerticalStackLayout Padding="10"
-                                 Spacing="25">
+            <VerticalStackLayout Padding="10" Spacing="20">
 
-                <!-- Line Plot Section -->
+                <!-- Filters -->
+                <Frame Padding="10" CornerRadius="10" BackgroundColor="{AppThemeBinding Light=#f5f5f5, Dark=#333}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="Select Subject:" FontAttributes="Bold" />
+                        <Picker x:Name="SubjectPicker"
+                                SelectedIndexChanged="OnSubjectChanged"
+                                Title="Choose subject" />
+
+                        <Label Text="Select Date:" FontAttributes="Bold" />
+                        <DatePicker x:Name="DatePickerFilter"
+                                    DateSelected="OnDateSelected" />
+                    </VerticalStackLayout>
+                </Frame>
+
+                <!-- Charts -->
                 <Label Text="Focus Trend Over Time"
                        FontSize="20"
                        FontAttributes="Bold"
                        HorizontalOptions="Center" />
 
-                <ScottPlot:MauiPlot x:Name="LinePlot"
-                                    HeightRequest="400"
-                                    WidthRequest="700" />
-
-                <!-- Bar Plot Section -->
-                <Label Text="Average Eye Closures by Subject"
-                       FontSize="20"
-                       FontAttributes="Bold"
-                       HorizontalOptions="Center"
-                       Margin="0,10,0,0" />
-
-                <ScottPlot:MauiPlot x:Name="BarPlot"
-                                    HeightRequest="300"
-                                    WidthRequest="650" />
-
+                <VerticalStackLayout x:Name="ChartsContainer"
+                                     Spacing="30">
+                    <!-- Multiple ScottPlot charts will be added here dynamically -->
+                </VerticalStackLayout>
             </VerticalStackLayout>
         </ScrollView>
     </Grid>
 </ContentPage>
-
