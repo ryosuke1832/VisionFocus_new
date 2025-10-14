@@ -209,33 +209,12 @@
                                FontSize="18"
                                FontAttributes="Bold" />
 
-                        <!-- Sound Type -->
-                        <VerticalStackLayout Spacing="5">
-                            <Label Text="Alert Sound Type"
-                                   FontSize="16" />
-
-                            <Grid ColumnDefinitions="*, Auto" ColumnSpacing="10">
-                                <Picker x:Name="SoundTypePicker"
-                                        Grid.Column="0"
-                                        FontSize="14"
-                                        SelectedIndexChanged="OnSoundTypeChanged" />
-
-                                <Button Grid.Column="1"
-                                        Text="▶ Test"
-                                        Clicked="OnTestSoundClicked"
-                                        BackgroundColor="#2196F3"
-                                        TextColor="White"
-                                        WidthRequest="80"
-                                        CornerRadius="10" />
-                            </Grid>
-                        </VerticalStackLayout>
-
                         <!-- Volume -->
                         <VerticalStackLayout Spacing="5">
                             <Label Text="Alert Volume"
                                    FontSize="16" />
 
-                            <Grid ColumnDefinitions="*, Auto" ColumnSpacing="10">
+                            <Grid ColumnDefinitions="*, Auto, Auto" ColumnSpacing="10">
                                 <Slider x:Name="VolumeSlider"
                                         Grid.Column="0"
                                         Minimum="0"
@@ -252,6 +231,14 @@
                                        VerticalOptions="Center"
                                        WidthRequest="50"
                                        HorizontalTextAlignment="End" />
+
+                                <Button Grid.Column="2"
+                                        Text="▶ Test"
+                                        Clicked="OnTestSoundClicked"
+                                        BackgroundColor="#2196F3"
+                                        TextColor="White"
+                                        WidthRequest="80"
+                                        CornerRadius="10" />
                             </Grid>
                         </VerticalStackLayout>
                     </VerticalStackLayout>

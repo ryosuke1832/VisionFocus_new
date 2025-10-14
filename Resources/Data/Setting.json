@@ -9,5 +9,5 @@
   "AlertThresholdSeconds": 5,
   "WarningThresholdSeconds": 3,
   "AlertSoundType": 0,
-  "AlertVolume": 0.8
+  "AlertVolume": 0.767
 }

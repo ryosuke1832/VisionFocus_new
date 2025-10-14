@@ -14,7 +14,6 @@ namespace VisionFocus
             SubjectsCollectionView.ItemsSource = _subjects;
 
             LoadSettings();
-            InitializeSoundPicker();
         }
 
         /// <summary>
@@ -44,28 +43,13 @@ namespace VisionFocus
                 AlertThresholdSlider.Value = _currentSettings.AlertThresholdSeconds;
                 AlertThresholdLabel.Text = _currentSettings.AlertThresholdSeconds.ToString("F1");
 
-                // Sound settings
-                SoundTypePicker.SelectedIndex = _currentSettings.AlertSoundType;
+                // Sound settings (volume only)
                 VolumeSlider.Value = _currentSettings.AlertVolume;
                 VolumeLabel.Text = $"{(_currentSettings.AlertVolume * 100):F0}%";
             }
             catch (Exception ex)
             {
                 DisplayAlert("Error", $"Failed to load settings: {ex.Message}", "OK");
-            }
-        }
-
-        /// <summary>
-        /// Initialize sound picker
-        /// </summary>
-        private void InitializeSoundPicker()
-        {
-            var soundNames = AlertSoundService.GetAvailableSounds();
-            SoundTypePicker.ItemsSource = soundNames;
-
-            if (_currentSettings != null)
-            {
-                SoundTypePicker.SelectedIndex = _currentSettings.AlertSoundType;
             }
         }
 
@@ -122,27 +106,15 @@ namespace VisionFocus
         }
 
         /// <summary>
-        /// Sound type changed event
-        /// </summary>
-        private void OnSoundTypeChanged(object sender, EventArgs e)
-        {
-            if (SoundTypePicker.SelectedIndex >= 0)
-            {
-                _currentSettings.AlertSoundType = SoundTypePicker.SelectedIndex;
-            }
-        }
-
-        /// <summary>
         /// Test sound button click event
         /// </summary>
         private void OnTestSoundClicked(object sender, EventArgs e)
         {
             try
             {
-                int soundIndex = SoundTypePicker.SelectedIndex;
                 double volume = VolumeSlider.Value;
-
-                AlertSoundService.PlaySampleSound(soundIndex, volume);
+                // 常にBeepサウンドを使用
+                AlertSoundService.PlaySampleSound(0, volume);
             }
             catch (Exception ex)
             {
@@ -216,6 +188,8 @@ namespace VisionFocus
             {
                 // Update subjects list
                 _currentSettings.Subjects = _subjects.ToList();
+                // AlertSoundTypeは常に0（Beep）
+                _currentSettings.AlertSoundType = 0;
 
                 // Save settings
                 SettingsService.SaveSettings(_currentSettings);
@@ -260,7 +234,7 @@ namespace VisionFocus
                 Subjects = _subjects.ToList(),
                 AlertThresholdSeconds = AlertThresholdSlider.Value,
                 WarningThresholdSeconds = WarningThresholdSlider.Value,
-                AlertSoundType = SoundTypePicker.SelectedIndex,
+                AlertSoundType = 0, // 常にBeep
                 AlertVolume = VolumeSlider.Value
             };
 
@@ -270,7 +244,6 @@ namespace VisionFocus
             bool hasChanges = currentFromUI.SessionDurationMinutes != saved.SessionDurationMinutes ||
                             currentFromUI.AlertThresholdSeconds != saved.AlertThresholdSeconds ||
                             currentFromUI.WarningThresholdSeconds != saved.WarningThresholdSeconds ||
-                            currentFromUI.AlertSoundType != saved.AlertSoundType ||
                             Math.Abs(currentFromUI.AlertVolume - saved.AlertVolume) > 0.01 ||
                             !currentFromUI.Subjects.SequenceEqual(saved.Subjects);
 
