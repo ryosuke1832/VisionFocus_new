@@ -120,6 +120,43 @@
                         CornerRadius="40"
                         FontSize="32" />
             </HorizontalStackLayout>
+
+            <!-- Debug Mode Controls (Bottom Right) -->
+            <VerticalStackLayout HorizontalOptions="End"
+                               VerticalOptions="End"
+                               Spacing="10">
+                <!-- Debug Mode Toggle -->
+                <HorizontalStackLayout Spacing="10">
+                    <Label Text="Debug Mode:"
+                           TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"
+                           FontSize="14"
+                           VerticalOptions="Center" />
+                    <Switch x:Name="DebugModeSwitch"
+                            Toggled="OnDebugModeToggled"
+                            VerticalOptions="Center" />
+                </HorizontalStackLayout>
+
+                <!-- Eye State Toggle (Visible only in Debug Mode) -->
+                <HorizontalStackLayout x:Name="EyeStateToggleContainer"
+                                     IsVisible="False"
+                                     Spacing="10">
+                    <Label Text="Eye State:"
+                           TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"
+                           FontSize="14"
+                           VerticalOptions="Center" />
+                    <HorizontalStackLayout Spacing="5">
+                        <RadioButton x:Name="ClosedRadioButton"
+                                   Content="Closed"
+                                   IsChecked="True"
+                                   CheckedChanged="OnEyeStateRadioChanged"
+                                   GroupName="EyeState" />
+                        <RadioButton x:Name="OpenRadioButton"
+                                   Content="Open"
+                                   CheckedChanged="OnEyeStateRadioChanged"
+                                   GroupName="EyeState" />
+                    </HorizontalStackLayout>
+                </HorizontalStackLayout>
+            </VerticalStackLayout>
         </Grid>
     </Grid>
 </ContentPage>

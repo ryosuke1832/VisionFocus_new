@@ -28,6 +28,10 @@ namespace VisionFocus
         // Selected subject
         private string _selectedSubject = string.Empty;
 
+        // Debug mode settings
+        private bool _isDebugMode = false;
+        private string _debugImageFileName = "Closed.jpg";
+
         public CameraPage()
         {
             InitializeComponent();
@@ -198,6 +202,12 @@ namespace VisionFocus
                 // Start timer
                 _timerService.Start(settings.SessionDurationMinutes);
 
+                // Set debug mode if enabled
+                if (_isDebugMode)
+                {
+                    _monitoringService.SetDebugMode(_isDebugMode, _debugImageFileName);
+                }
+
                 // Update UI
                 StartButton.IsVisible = false;
                 ControlButtons.IsVisible = true;
@@ -305,7 +315,6 @@ namespace VisionFocus
                 };
 
                 LogContainer.Children.Add(label);
-
 
                 Dispatcher.Dispatch(async () =>
                 {
@@ -479,6 +488,48 @@ namespace VisionFocus
             {
                 _selectedSubject = SubjectPicker.SelectedItem?.ToString() ?? string.Empty;
                 System.Diagnostics.Debug.WriteLine($"Selected subject: {_selectedSubject}");
+            }
+        }
+
+        /// <summary>
+        /// Handle debug mode toggle
+        /// </summary>
+        private void OnDebugModeToggled(object sender, ToggledEventArgs e)
+        {
+            _isDebugMode = e.Value;
+            EyeStateToggleContainer.IsVisible = e.Value;
+
+            if (_monitoringService != null)
+            {
+                _monitoringService.SetDebugMode(_isDebugMode, _debugImageFileName);
+            }
+
+            System.Diagnostics.Debug.WriteLine($"Debug mode: {(_isDebugMode ? "ON" : "OFF")}");
+        }
+
+        /// <summary>
+        /// Handle eye state radio button change in debug mode
+        /// </summary>
+        private void OnEyeStateRadioChanged(object sender, CheckedChangedEventArgs e)
+        {
+            if (!e.Value) return;
+
+            var radioButton = sender as RadioButton;
+            if (radioButton == ClosedRadioButton)
+            {
+                _debugImageFileName = "Closed.jpg";
+                System.Diagnostics.Debug.WriteLine("Debug image: Closed.jpg");
+            }
+            else if (radioButton == OpenRadioButton)
+            {
+                _debugImageFileName = "Open.jpg";
+                System.Diagnostics.Debug.WriteLine("Debug image: Open.jpg");
+            }
+
+            // Update monitoring service if running
+            if (_monitoringService != null && _isDebugMode)
+            {
+                _monitoringService.SetDebugMode(_isDebugMode, _debugImageFileName);
             }
         }
 

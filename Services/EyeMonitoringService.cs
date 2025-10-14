@@ -55,6 +55,10 @@ namespace VisionFocus.Services
         // Polymorphic alert strategy (Demonstrates Polymorphism)
         private AlertStrategyBase? _alertStrategy;
 
+        // Debug mode settings
+        private bool _isDebugMode = false;
+        private string _debugImageFileName = "Closed.jpg";
+
         // Settings
         public double AlertThresholdSeconds { get; set; } = 5.0;
         public double WarningThresholdSeconds { get; set; } = 3.0;
@@ -95,6 +99,26 @@ namespace VisionFocus.Services
         }
 
         /// <summary>
+        /// Set debug mode
+        /// </summary>
+        /// <param name="enabled">Enable or disable debug mode</param>
+        /// <param name="debugImageFileName">Debug image file name (Closed.jpg or Open.jpg)</param>
+        public void SetDebugMode(bool enabled, string debugImageFileName)
+        {
+            _isDebugMode = enabled;
+            _debugImageFileName = debugImageFileName;
+
+            if (_isDebugMode)
+            {
+                AddLog(LogLevel.Info, $"?? Debug mode enabled: {debugImageFileName}");
+            }
+            else
+            {
+                AddLog(LogLevel.Info, "?? Debug mode disabled");
+            }
+        }
+
+        /// <summary>
         /// Start monitoring
         /// </summary>
         public void StartMonitoring()
@@ -103,7 +127,7 @@ namespace VisionFocus.Services
             _checkTimer.Elapsed += async (s, e) => await CheckEyeStateAsync();
             _checkTimer.Start();
 
-            AddLog(LogLevel.Success, "??? Monitoring started");
+            AddLog(LogLevel.Success, "? Monitoring started");
         }
 
         /// <summary>
@@ -124,7 +148,7 @@ namespace VisionFocus.Services
         public void TogglePause()
         {
             _isPaused = !_isPaused;
-            AddLog(LogLevel.Info, _isPaused ? "?? Monitoring paused" : "?? Monitoring resumed");
+            AddLog(LogLevel.Info, _isPaused ? "? Monitoring paused" : "? Monitoring resumed");
         }
 
         /// <summary>
@@ -136,8 +160,18 @@ namespace VisionFocus.Services
 
             try
             {
-                string imagePath = ImageHelper.GetImagePath("RealtimePic.jpg");
-                if (!File.Exists(imagePath)) return;
+                // Select image file based on debug mode
+                string imageFileName = _isDebugMode ? _debugImageFileName : "RealtimePic.jpg";
+                string imagePath = ImageHelper.GetImagePath(imageFileName);
+
+                if (!File.Exists(imagePath))
+                {
+                    if (_isDebugMode)
+                    {
+                        AddLog(LogLevel.Error, $"Debug image not found: {imageFileName}");
+                    }
+                    return;
+                }
 
                 // Call Roboflow API
                 string jsonResponse = await RoboflowService.InferImageAsync(imagePath);
@@ -188,7 +222,7 @@ namespace VisionFocus.Services
                     _alertTriggered = false;
 
                     EyeStateChanged?.Invoke(this, EyeState.Closed);
-                    AddLog(LogLevel.Warning, "???? Eyes closed detected");
+                    AddLog(LogLevel.Warning, "??? Eyes closed detected");
                 }
                 else
                 {
@@ -200,7 +234,7 @@ namespace VisionFocus.Services
                     {
                         _warningTriggered = true;
                         WarningTriggered?.Invoke(this, EventArgs.Empty);
-                        AddLog(LogLevel.Warning, $"?? Eyes closed for {closedDuration:F1}s");
+                        AddLog(LogLevel.Warning, $"? Eyes closed for {closedDuration:F1}s");
                     }
 
                     // Alert threshold - INTERVAL-BASED ALERT (every 2 seconds)

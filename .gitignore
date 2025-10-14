@@ -38,11 +38,3 @@ project.fragment.lock.json
 **/*.Windows/obj/
 
 
-**/Resources/Raw/**/*.db
-**/Resources/Raw/**/*.db-*
-
-# Ignore captured images but keep the folder structure
-**/Resources/Raw/CapturedImages/*.jpg
-**/Resources/Raw/CapturedImages/*.jpeg
-**/Resources/Raw/CapturedImages/*.png
-!**/Resources/Raw/CapturedImages/.gitkeep
