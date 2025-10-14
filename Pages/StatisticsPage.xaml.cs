@@ -2,6 +2,7 @@ using Microsoft.Maui.Controls;
 using ScottPlot;
 using System.Runtime.ConstrainedExecution;
 
+
 namespace VisionFocus;
 
 public partial class StatisticsPage : ContentPage
