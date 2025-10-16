@@ -113,8 +113,8 @@ namespace VisionFocus
             try
             {
                 double volume = VolumeSlider.Value;
-                // 常にBeepサウンドを使用
-                AlertSoundService.PlaySampleSound(0, volume);
+                // Play simple beep sound
+                AlertSoundService.PlaySound(volume);
             }
             catch (Exception ex)
             {
@@ -188,8 +188,6 @@ namespace VisionFocus
             {
                 // Update subjects list
                 _currentSettings.Subjects = _subjects.ToList();
-                // AlertSoundTypeは常に0（Beep）
-                _currentSettings.AlertSoundType = 0;
 
                 // Save settings
                 SettingsService.SaveSettings(_currentSettings);
@@ -234,7 +232,6 @@ namespace VisionFocus
                 Subjects = _subjects.ToList(),
                 AlertThresholdSeconds = AlertThresholdSlider.Value,
                 WarningThresholdSeconds = WarningThresholdSlider.Value,
-                AlertSoundType = 0, // 常にBeep
                 AlertVolume = VolumeSlider.Value
             };
 

@@ -1,12 +1,12 @@
-using VisionFocus.Utilities;
+using Microsoft.UI.Xaml;
 using System.Diagnostics;
 using System.Text.Json;
+using VisionFocus.Utilities;
 
 namespace VisionFocus.Services
 {
     /// <summary>
     /// Service for monitoring eye state and triggering alerts
-    /// Demonstrates polymorphism with AlertStrategyBase
     /// </summary>
     public class EyeMonitoringService : IDisposable
     {
@@ -19,9 +19,6 @@ namespace VisionFocus.Services
         private bool _alertTriggered = false;
         private bool _isPaused = false;
 
-        // Polymorphic alert strategy
-        private AlertStrategyBase? _alertStrategy;
-
         // Debug mode settings
         private bool _isDebugMode = false;
         private string _debugImageFileName = "Closed.jpg";
@@ -30,6 +27,8 @@ namespace VisionFocus.Services
         public double AlertThresholdSeconds { get; set; } = 5.0;
         public double WarningThresholdSeconds { get; set; } = 3.0;
         public double AlertRepeatIntervalSeconds { get; set; } = 2.0;
+        public double AlertVolume { get; set; } = 0.8;
+
         private const int MIN_DELAY_BETWEEN_CHECKS_MS = 100; // Minimum wait time between API calls
 
         // Events
@@ -39,29 +38,11 @@ namespace VisionFocus.Services
         public event EventHandler? WarningTriggered;
 
         /// <summary>
-        /// Constructor with optional alert strategy
+        /// Constructor
         /// </summary>
-        public EyeMonitoringService(AlertStrategyBase? alertStrategy = null)
+        public EyeMonitoringService()
         {
-            _alertStrategy = alertStrategy ?? AlertSoundService.CreateAlertStrategy(AlertSoundType.Beep);
-        }
-
-        /// <summary>
-        /// Set alert strategy (Strategy Pattern - Polymorphism)
-        /// </summary>
-        public void SetAlertStrategy(AlertStrategyBase strategy)
-        {
-            _alertStrategy = strategy;
-            AddLog(LogLevel.Info, $"Alert strategy changed to: {strategy.GetDescription()}");
-        }
-
-        /// <summary>
-        /// Set alert strategy by type
-        /// </summary>
-        public void SetAlertStrategy(AlertSoundType soundType)
-        {
-            _alertStrategy = AlertSoundService.CreateAlertStrategy(soundType);
-            AddLog(LogLevel.Info, $"Alert strategy changed to: {soundType}");
+            AddLog(LogLevel.Info, "Monitoring service initialized");
         }
 
         /// <summary>
@@ -85,7 +66,7 @@ namespace VisionFocus.Services
         }
 
         /// <summary>
-        /// Start monitoring (loop-based)
+        /// Start monitoring
         /// </summary>
         public void StartMonitoring()
         {
@@ -205,7 +186,7 @@ namespace VisionFocus.Services
                 // Output additional info in debug mode
                 if (_isDebugMode)
                 {
-                    Debug.WriteLine($"?? Parsed result: {(eyesOpen ? "Eyes open" : "Eyes closed")}");
+                    Debug.WriteLine($"??? Parsed result: {(eyesOpen ? "Eyes open" : "Eyes closed")}");
                 }
 
                 ProcessEyeState(eyesOpen);
@@ -260,7 +241,7 @@ namespace VisionFocus.Services
                                 : 0.0;
 
                             // Detailed log: Detected class name and confidence
-                            AddLog(LogLevel.Info, $"?? Class: '{className}', Confidence: {confidence:P1}");
+                            AddLog(LogLevel.Info, $"??? Class: '{className}', Confidence: {confidence:P1}");
                             Debug.WriteLine($"   „¤„Ÿ Class: '{className}', Confidence: {confidence}");
 
                             // Check class name
@@ -288,7 +269,7 @@ namespace VisionFocus.Services
                     // Priority: Closed > Open > Default
                     if (hasClosed)
                     {
-                        AddLog(LogLevel.Alert, "? Final result: Eyes CLOSED");
+                        AddLog(LogLevel.Alert, "?? Final result: Eyes CLOSED");
                         return false;
                     }
 
@@ -364,8 +345,8 @@ namespace VisionFocus.Services
                                 AlertTriggered?.Invoke(this, EventArgs.Empty);
                             }
 
-                            // POLYMORPHIC CALL - Play alert at intervals
-                            _alertStrategy?.Play();
+                            // Play alert sound
+                            AlertSoundService.PlaySound(AlertVolume);
 
                             // Update last alert time
                             _lastAlertTime = DateTime.Now;

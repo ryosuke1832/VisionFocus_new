@@ -5,7 +5,6 @@ namespace VisionFocus
 {
     /// <summary>
     /// Camera Page - UI event handling and service coordination with session tracking
-    /// Demonstrates polymorphism through alert strategy pattern
     /// </summary>
     public partial class CameraPage : ContentPage
     {
@@ -150,7 +149,6 @@ namespace VisionFocus
 
         /// <summary>
         /// Initialize camera and services
-        /// Demonstrates polymorphism: Creates alert strategy based on settings
         /// </summary>
         private async Task InitializeServicesAsync()
         {
@@ -168,19 +166,11 @@ namespace VisionFocus
                 _cameraService.CameraStarted += OnCameraStarted;
                 _cameraService.CameraStopped += OnCameraStopped;
 
-                // POLYMORPHISM DEMONSTRATION:
-                // Create alert strategy based on settings (Factory Pattern)
-                // Base class type, but creates derived class instances
-                var soundType = AlertSoundService.GetSoundTypeFromIndex(settings.AlertSoundType);
-                AlertStrategyBase alertStrategy = AlertSoundService.CreateAlertStrategy(soundType);
-                alertStrategy.Volume = settings.AlertVolume;
-
-                // Initialize monitoring service with polymorphic alert strategy
-                // The monitoring service will call Play() on the base class,
-                // but the actual implementation from the derived class will execute
-                _monitoringService = new EyeMonitoringService(alertStrategy);
+                // Initialize monitoring service with alert volume
+                _monitoringService = new EyeMonitoringService();
                 _monitoringService.AlertThresholdSeconds = settings.AlertThresholdSeconds;
                 _monitoringService.WarningThresholdSeconds = settings.WarningThresholdSeconds;
+                _monitoringService.AlertVolume = settings.AlertVolume;
                 _monitoringService.LogEntryAdded += OnLogEntryAdded;
                 _monitoringService.EyeStateChanged += OnEyeStateChanged;
                 _monitoringService.AlertTriggered += OnAlertTriggered;
@@ -499,18 +489,17 @@ namespace VisionFocus
             _isDebugMode = e.Value;
             EyeStateToggleContainer.IsVisible = e.Value;
 
-            System.Diagnostics.Debug.WriteLine($"🔧 デバッグモードトグル: {(_isDebugMode ? "ON" : "OFF")}");
-            System.Diagnostics.Debug.WriteLine($"📁 現在のデバッグファイル: {_debugImageFileName}");
-
+            System.Diagnostics.Debug.WriteLine($"🔧 Debug mode toggle: {(_isDebugMode ? "ON" : "OFF")}");
+            System.Diagnostics.Debug.WriteLine($"📁 Current debug file: {_debugImageFileName}");
 
             if (_monitoringService != null)
             {
                 _monitoringService.SetDebugMode(_isDebugMode, _debugImageFileName);
-                System.Diagnostics.Debug.WriteLine($"✅ MonitoringServiceに反映: SetDebugMode({_isDebugMode}, {_debugImageFileName})");
+                System.Diagnostics.Debug.WriteLine($"✅ Applied to MonitoringService: SetDebugMode({_isDebugMode}, {_debugImageFileName})");
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine("⚠️ MonitoringServiceがまだ初期化されていません");
+                System.Diagnostics.Debug.WriteLine("⚠️ MonitoringService not yet initialized");
             }
         }
 
@@ -539,7 +528,6 @@ namespace VisionFocus
                 _monitoringService.SetDebugMode(_isDebugMode, _debugImageFileName);
             }
         }
-
         #endregion
 
         #region Helper Methods

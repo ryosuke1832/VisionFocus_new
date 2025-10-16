@@ -27,10 +27,6 @@ namespace VisionFocus
         /// </summary>
         public double WarningThresholdSeconds { get; set; } = 3.0;
 
-        /// <summary>
-        /// Alert sound type (0: Beep, 1: Asterisk, 2: Exclamation, 3: Hand, 4: Question)
-        /// </summary>
-        public int AlertSoundType { get; set; } = 0;
 
         /// <summary>
         /// Alert volume (0.0 - 1.0)
@@ -48,7 +44,6 @@ namespace VisionFocus
                 Subjects = new List<string> { "Math", "Science", "English" },
                 AlertThresholdSeconds = 5.0,
                 WarningThresholdSeconds = 3.0,
-                AlertSoundType = 0,
                 AlertVolume = 0.8
             };
         }
