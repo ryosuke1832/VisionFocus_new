@@ -7,6 +7,7 @@ namespace VisionFocus.Services
 {
     /// <summary>
     /// Service for monitoring eye state and triggering alerts
+    /// Demonstrates polymorphism through ImageSourceStrategy pattern
     /// </summary>
     public class EyeMonitoringService : IDisposable
     {
@@ -19,9 +20,8 @@ namespace VisionFocus.Services
         private bool _alertTriggered = false;
         private bool _isPaused = false;
 
-        // Debug mode settings
-        private bool _isDebugMode = false;
-        private string _debugImageFileName = "Closed.jpg";
+        // Polymorphism: Strategy pattern for image source selection
+        private ImageSourceStrategyBase _imageSourceStrategy;
 
         // Settings
         public double AlertThresholdSeconds { get; set; } = 5.0;
@@ -38,30 +38,45 @@ namespace VisionFocus.Services
         public event EventHandler? WarningTriggered;
 
         /// <summary>
-        /// Constructor
+        /// Constructor - initializes with camera image strategy by default
         /// </summary>
         public EyeMonitoringService()
         {
+            // Default: use real camera feed
+            _imageSourceStrategy = new CameraImageStrategy();
             AddLog(LogLevel.Info, "Monitoring service initialized");
         }
 
         /// <summary>
-        /// Set debug mode
+        /// Set debug mode - switches between camera and debug image strategies
+        /// Demonstrates polymorphism: different strategies, same interface
         /// </summary>
-        public void SetDebugMode(bool enabled, string debugImageFileName)
+        public void SetDebugMode(bool enabled, string debugImageFileName = "Closed.jpg")
         {
-            _isDebugMode = enabled;
-            _debugImageFileName = debugImageFileName;
-
-            if (_isDebugMode)
+            if (enabled)
             {
-                AddLog(LogLevel.Info, $"?? Debug mode enabled: {debugImageFileName}");
-                Debug.WriteLine($"?? Debug mode: ON, File: {debugImageFileName}");
+                // Switch to debug strategy OR update existing debug strategy
+                if (_imageSourceStrategy is DebugImageStrategy debugStrategy)
+                {
+                    // Already in debug mode, just change the image
+                    debugStrategy.SetDebugImage(debugImageFileName);
+                    AddLog(LogLevel.Info, $"?? Debug image changed to: {debugImageFileName}");
+                }
+                else
+                {
+                    // Switch from camera to debug mode
+                    _imageSourceStrategy = new DebugImageStrategy(debugImageFileName);
+                    AddLog(LogLevel.Info, $"?? Debug mode enabled: {debugImageFileName}");
+                }
+
+                Debug.WriteLine($"?? Strategy: {_imageSourceStrategy.GetDescription()}");
             }
             else
             {
+                // Switch back to camera strategy
+                _imageSourceStrategy = new CameraImageStrategy();
                 AddLog(LogLevel.Info, "?? Debug mode disabled");
-                Debug.WriteLine("?? Debug mode: OFF");
+                Debug.WriteLine($"?? Strategy: {_imageSourceStrategy.GetDescription()}");
             }
         }
 
@@ -79,7 +94,7 @@ namespace VisionFocus.Services
             _cancellationTokenSource = new CancellationTokenSource();
             _monitoringTask = Task.Run(() => MonitoringLoopAsync(_cancellationTokenSource.Token));
 
-            AddLog(LogLevel.Success, "? Monitoring started");
+            AddLog(LogLevel.Success, $"? Monitoring started ({_imageSourceStrategy.GetDescription()})");
         }
 
         /// <summary>
@@ -139,40 +154,34 @@ namespace VisionFocus.Services
 
         /// <summary>
         /// Check eye state from image
+        /// Demonstrates polymorphism: uses strategy pattern to get image path
         /// </summary>
         private async Task CheckEyeStateAsync()
         {
             try
             {
-                // Select image file based on debug mode
-                string imageFileName = _isDebugMode ? _debugImageFileName : "RealtimePic.jpg";
-                string imagePath = ImageHelper.GetImagePath(imageFileName);
+                // POLYMORPHISM IN ACTION: 
+                // Call the same method regardless of which strategy is active
+                // The actual behavior depends on the concrete strategy type
+                string imagePath = await _imageSourceStrategy.GetImagePathAsync();
 
-                // Always log output (with details in debug mode)
-                if (_isDebugMode)
-                {
-                    AddLog(LogLevel.Info, $"?? [Debug] Sending image: {imageFileName}");
-                    Debug.WriteLine($"?? Full path: {imagePath}");
-                }
-                else
-                {
-                    AddLog(LogLevel.Info, $"?? Checking eye state...");
-                }
+                AddLog(LogLevel.Info, $"?? Checking: {_imageSourceStrategy.GetDescription()}");
+                Debug.WriteLine($"?? Image path: {imagePath}");
 
                 if (!File.Exists(imagePath))
                 {
-                    AddLog(LogLevel.Error, $"? Image not found: {imageFileName}");
+                    AddLog(LogLevel.Error, $"? Image not found: {imagePath}");
                     return;
                 }
 
                 // Call Roboflow API
                 string jsonResponse = await RoboflowService.InferImageAsync(imagePath);
 
-                // Always log API call success
+                // Log API call success
                 AddLog(LogLevel.Info, $"? API response received");
 
                 // Output full response in debug mode
-                if (_isDebugMode)
+                if (_imageSourceStrategy is DebugImageStrategy)
                 {
                     AddLog(LogLevel.Info, $"?? [Debug] API response: {jsonResponse}");
                     Debug.WriteLine($"?? Full response: {jsonResponse}");
@@ -180,14 +189,8 @@ namespace VisionFocus.Services
 
                 bool eyesOpen = ParseEyeState(jsonResponse);
 
-                // Always log parse result
+                // Log parse result
                 AddLog(LogLevel.Info, $"??? Result: {(eyesOpen ? "Eyes open" : "Eyes closed")}");
-
-                // Output additional info in debug mode
-                if (_isDebugMode)
-                {
-                    Debug.WriteLine($"??? Parsed result: {(eyesOpen ? "Eyes open" : "Eyes closed")}");
-                }
 
                 ProcessEyeState(eyesOpen);
             }
