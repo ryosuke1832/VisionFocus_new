@@ -1,5 +1,6 @@
 using VisionFocus.Utilities;
 using System.Diagnostics;
+using System.Text.Json;
 
 namespace VisionFocus.Services
 {
@@ -111,7 +112,7 @@ namespace VisionFocus.Services
             _cancellationTokenSource = null;
             _monitoringTask = null;
 
-            AddLog(LogLevel.Info, "Monitoring stopped");
+            AddLog(LogLevel.Info, "? Monitoring stopped");
         }
 
         /// <summary>
@@ -148,6 +149,7 @@ namespace VisionFocus.Services
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"Monitoring error: {ex.Message}");
+                    AddLog(LogLevel.Error, $"? Monitoring error: {ex.Message}");
                     // Continue monitoring even if error occurs
                     await Task.Delay(1000, cancellationToken);
                 }
@@ -165,38 +167,45 @@ namespace VisionFocus.Services
                 string imageFileName = _isDebugMode ? _debugImageFileName : "RealtimePic.jpg";
                 string imagePath = ImageHelper.GetImagePath(imageFileName);
 
-                // ?? Debug: Log the image file name being sent
+                // Always log output (with details in debug mode)
                 if (_isDebugMode)
                 {
-                    AddLog(LogLevel.Info, $"?? Sending image: {imageFileName}");
+                    AddLog(LogLevel.Info, $"?? [Debug] Sending image: {imageFileName}");
                     Debug.WriteLine($"?? Full path: {imagePath}");
+                }
+                else
+                {
+                    AddLog(LogLevel.Info, $"?? Checking eye state...");
                 }
 
                 if (!File.Exists(imagePath))
                 {
-                    if (_isDebugMode)
-                    {
-                        AddLog(LogLevel.Error, $"Debug image not found: {imageFileName}");
-                    }
+                    AddLog(LogLevel.Error, $"? Image not found: {imageFileName}");
                     return;
                 }
 
                 // Call Roboflow API
                 string jsonResponse = await RoboflowService.InferImageAsync(imagePath);
 
-                // ?? Debug: Log entire API response
+                // Always log API call success
+                AddLog(LogLevel.Info, $"? API response received");
+
+                // Output full response in debug mode
                 if (_isDebugMode)
                 {
-                    AddLog(LogLevel.Info, $"?? API response: {jsonResponse}");
+                    AddLog(LogLevel.Info, $"?? [Debug] API response: {jsonResponse}");
                     Debug.WriteLine($"?? Full response: {jsonResponse}");
                 }
 
                 bool eyesOpen = ParseEyeState(jsonResponse);
 
-                // ?? Debug: Log parsing result
+                // Always log parse result
+                AddLog(LogLevel.Info, $"??? Result: {(eyesOpen ? "Eyes open" : "Eyes closed")}");
+
+                // Output additional info in debug mode
                 if (_isDebugMode)
                 {
-                    AddLog(LogLevel.Info, $"?? Parsed result: {(eyesOpen ? "Eyes open" : "Eyes closed")}");
+                    Debug.WriteLine($"?? Parsed result: {(eyesOpen ? "Eyes open" : "Eyes closed")}");
                 }
 
                 ProcessEyeState(eyesOpen);
@@ -204,7 +213,7 @@ namespace VisionFocus.Services
             catch (Exception ex)
             {
                 Debug.WriteLine($"Eye state check error: {ex.Message}");
-                AddLog(LogLevel.Error, $"Error: {ex.Message}");
+                AddLog(LogLevel.Error, $"? Error: {ex.Message}");
             }
         }
 
@@ -215,54 +224,95 @@ namespace VisionFocus.Services
         {
             try
             {
-                // Convert to lowercase for substring search
-                string lowerResponse = jsonResponse.ToLower();
+                // Detailed log: Output full response
+                AddLog(LogLevel.Info, $"?? Full JSON: {jsonResponse}");
+                Debug.WriteLine($"?? Full JSON: {jsonResponse}");
 
-                // Look for classes containing "open eye" or "open"
-                bool hasOpen = lowerResponse.Contains("\"class\":\"open") ||
-                               lowerResponse.Contains("class\":\"open");
+                // Parse JSON
+                using JsonDocument doc = JsonDocument.Parse(jsonResponse);
+                JsonElement root = doc.RootElement;
 
-                // Look for classes containing "closed eye" or "closed"
-                bool hasClosed = lowerResponse.Contains("\"class\":\"closed") ||
-                                 lowerResponse.Contains("class\":\"closed");
-
-                // ?? Debug: Log detected classes in detail
-                if (_isDebugMode)
+                // Check predictions array
+                if (root.TryGetProperty("predictions", out JsonElement predictions))
                 {
-                    Debug.WriteLine($"?? 'open' detected: {hasOpen}, 'closed' detected: {hasClosed}");
+                    int count = predictions.GetArrayLength();
+                    AddLog(LogLevel.Info, $"?? Detection count: {count}");
+                    Debug.WriteLine($"?? Predictions array length: {count}");
 
-                    // Extract and display class name
-                    int classIndex = lowerResponse.IndexOf("\"class\":\"");
-                    if (classIndex >= 0)
+                    if (count == 0)
                     {
-                        int startIndex = classIndex + 9; // Length of "class":"
-                        int endIndex = lowerResponse.IndexOf("\"", startIndex);
-                        if (endIndex > startIndex)
+                        AddLog(LogLevel.Warning, "?? No predictions found - defaulting to Eyes Open");
+                        Debug.WriteLine("?? Empty predictions array");
+                        return true; // Default: eyes open
+                    }
+
+                    // Check each prediction
+                    bool hasOpen = false;
+                    bool hasClosed = false;
+
+                    foreach (JsonElement prediction in predictions.EnumerateArray())
+                    {
+                        if (prediction.TryGetProperty("class", out JsonElement classElement))
                         {
-                            string className = jsonResponse.Substring(startIndex, endIndex - startIndex);
-                            Debug.WriteLine($"   Detected class name: '{className}'");
+                            string className = classElement.GetString()?.ToLower() ?? "";
+                            double confidence = prediction.TryGetProperty("confidence", out JsonElement confElement)
+                                ? confElement.GetDouble()
+                                : 0.0;
+
+                            // Detailed log: Detected class name and confidence
+                            AddLog(LogLevel.Info, $"?? Class: '{className}', Confidence: {confidence:P1}");
+                            Debug.WriteLine($"   „¤„Ÿ Class: '{className}', Confidence: {confidence}");
+
+                            // Check class name
+                            if (className.Contains("open"))
+                            {
+                                hasOpen = true;
+                                AddLog(LogLevel.Success, $"? 'Open' detected in class: '{className}'");
+                            }
+                            else if (className.Contains("closed"))
+                            {
+                                hasClosed = true;
+                                AddLog(LogLevel.Warning, $"?? 'Closed' detected in class: '{className}'");
+                            }
+                            else
+                            {
+                                AddLog(LogLevel.Info, $"? Unknown class: '{className}'");
+                            }
                         }
                     }
-                }
 
-                // If open is detected, eyes are open
-                if (hasOpen)
-                {
+                    // Log determination result
+                    AddLog(LogLevel.Info, $"?? hasOpen={hasOpen}, hasClosed={hasClosed}");
+                    Debug.WriteLine($"?? Final detection: hasOpen={hasOpen}, hasClosed={hasClosed}");
+
+                    // Priority: Closed > Open > Default
+                    if (hasClosed)
+                    {
+                        AddLog(LogLevel.Alert, "? Final result: Eyes CLOSED");
+                        return false;
+                    }
+
+                    if (hasOpen)
+                    {
+                        AddLog(LogLevel.Success, "? Final result: Eyes OPEN");
+                        return true;
+                    }
+
+                    // If neither is detected
+                    AddLog(LogLevel.Warning, "?? Neither open nor closed detected - defaulting to Eyes Open");
                     return true;
                 }
-
-                // If closed is detected, eyes are closed
-                if (hasClosed)
+                else
                 {
-                    return false;
+                    AddLog(LogLevel.Error, "? No 'predictions' property in response");
+                    Debug.WriteLine("? Missing predictions property in JSON");
+                    return true;
                 }
-
-                // Default to eyes open if neither detected
-                return true;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Parse error: {ex.Message}");
+                AddLog(LogLevel.Error, $"? Parse error: {ex.Message}");
+                Debug.WriteLine($"? Parse exception: {ex}");
                 return true; // Default to eyes open on error
             }
         }
@@ -283,7 +333,7 @@ namespace VisionFocus.Services
                     _alertTriggered = false;
 
                     EyeStateChanged?.Invoke(this, EyeState.Closed);
-                    AddLog(LogLevel.Warning, "?? Eyes closed detected");
+                    AddLog(LogLevel.Warning, "??? Eyes closed detected");
                 }
                 else
                 {
@@ -295,7 +345,7 @@ namespace VisionFocus.Services
                     {
                         _warningTriggered = true;
                         WarningTriggered?.Invoke(this, EventArgs.Empty);
-                        AddLog(LogLevel.Warning, $"? Eyes closed for {closedDuration:F1}s");
+                        AddLog(LogLevel.Warning, $"?? Eyes closed for {closedDuration:F1}s");
                     }
 
                     // Alert threshold - INTERVAL-BASED ALERT (every 2 seconds)
@@ -338,7 +388,7 @@ namespace VisionFocus.Services
                     _lastAlertTime = DateTime.MinValue; // Reset alert timer
 
                     EyeStateChanged?.Invoke(this, EyeState.Open);
-                    AddLog(LogLevel.Success, $"??? Eyes opened (was closed for {closedDuration:F1}s)");
+                    AddLog(LogLevel.Success, $"? Eyes opened (was closed for {closedDuration:F1}s)");
                 }
             }
         }
