@@ -69,7 +69,7 @@
 	  </MauiAsset>
 	</ItemGroup>
 	<ItemGroup>
-	  <ProjectReference Include="VisionFocus.Core\VisionFocus.Core.csproj" />
+		<ProjectReference Include="VisionFocus.Core\VisionFocus.Core.csproj" />
 	</ItemGroup>
 
 </Project>
