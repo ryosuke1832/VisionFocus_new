@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
+namespace VisionFocus.Core.Models
 
-namespace VisionFocus
 {
     /// <summary>
     /// Settings data model class

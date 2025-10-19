@@ -1,5 +1,5 @@
 ﻿using VisionFocus.Services;
-using VisionFocus.Models;
+using VisionFocus.Core.Models;
 
 namespace VisionFocus
 {

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using VisionFocus.Core.Models;
 
 namespace VisionFocus
 {

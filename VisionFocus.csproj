@@ -68,5 +68,8 @@
 	    <LogicalName>%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
 	  </MauiAsset>
 	</ItemGroup>
+	<ItemGroup>
+	  <ProjectReference Include="VisionFocus.Core\VisionFocus.Core.csproj" />
+	</ItemGroup>
 
 </Project>

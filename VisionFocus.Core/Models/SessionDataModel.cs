@@ -1,4 +1,4 @@
-namespace VisionFocus.Models
+namespace VisionFocus.Core.Models
 {
     /// <summary>
     /// Model class for session summary data

@@ -1,4 +1,4 @@
-using VisionFocus.Models;
+using VisionFocus.Core.Models;
 
 namespace VisionFocus.Services
 {
